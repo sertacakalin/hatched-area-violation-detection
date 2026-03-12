@@ -1,0 +1,44 @@
+# Data & Weights (large files)
+data/
+weights/
+*.pt
+*.onnx
+*.engine
+
+# Results (regenerable)
+results/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environment
+venv/
+env/
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/
+
+# Database
+*.db
+*.sqlite3

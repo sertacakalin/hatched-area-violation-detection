@@ -1,0 +1,86 @@
+# ============================================================
+# Taralı Alan İhlal Tespit Sistemi — Ana Konfigürasyon
+# ============================================================
+
+# --- Genel ---
+general:
+  device: "auto"          # "auto", "cuda:0", "cpu"
+  video_source: "data/videos/test/sample.mp4"
+  output_dir: "results"
+  save_video: true
+  show_display: false     # Colab'da false, yerelde true
+  log_level: "INFO"
+
+# --- Araç Tespiti ---
+vehicle_detection:
+  model_path: "yolov8s.pt"
+  confidence_threshold: 0.35
+  iou_threshold: 0.45
+  classes: [2, 3, 5, 7]   # car, motorcycle, bus, truck (COCO IDs)
+  img_size: 640
+  half_precision: true     # FP16 — GPU'da hız artışı
+
+# --- Araç Takibi ---
+tracking:
+  tracker_type: "bytetrack"   # "bytetrack", "botsort", "deepsort"
+  config_path: "configs/bytetrack.yaml"
+
+# --- Bölge (ROI) ---
+zone:
+  zone_file: "configs/zones/camera_01.json"
+  polygon_buffer: -10      # Negatif = içe doğru küçült (piksel)
+  min_overlap_ratio: 0.3   # Araç bbox'ının bölge ile minimum örtüşme oranı
+
+# --- İhlal Tespiti ---
+violation:
+  min_frames_in_zone: 5    # Minimum kare sayısı (temporal filtre)
+  cooldown_frames: 90      # Aynı araç için tekrar ihlal süresi (3 sn @ 30fps)
+  states:
+    - OUTSIDE
+    - ENTERING
+    - INSIDE
+    - VIOLATION
+
+# --- Plaka Tespiti ---
+plate_detection:
+  model_path: "weights/plate_detector.pt"
+  confidence_threshold: 0.5
+  img_size: 640
+
+# --- Plaka OCR ---
+plate_ocr:
+  engine: "paddleocr"      # "paddleocr" veya "easyocr"
+  paddleocr:
+    lang: "en"
+    det: false             # Sadece tanıma (recognition)
+    rec: true
+    use_angle_cls: true
+    rec_algorithm: "SVTR_LCNet"
+  easyocr:
+    lang_list: ["en"]
+    gpu: true
+
+# --- Plaka Doğrulama ---
+plate_validation:
+  # Türk plaka formatı: il kodu (01-81) + harf(ler) + rakam(lar)
+  pattern: "^(0[1-9]|[1-7][0-9]|8[01])\\s?[A-Z]{1,3}\\s?\\d{2,4}$"
+  min_confidence: 0.6
+
+# --- Görselleştirme ---
+visualization:
+  bbox_color_vehicle: [0, 255, 0]     # Yeşil (BGR)
+  bbox_color_violation: [0, 0, 255]   # Kırmızı (BGR)
+  zone_color: [255, 165, 0]           # Turuncu (BGR)
+  zone_alpha: 0.3                     # Yarı şeffaf overlay
+  font_scale: 0.6
+  thickness: 2
+
+# --- Veritabanı ---
+database:
+  path: "results/violations.db"
+
+# --- Dashboard ---
+dashboard:
+  host: "0.0.0.0"
+  port: 8501
+  page_title: "Taralı Alan İhlal Tespit Sistemi"

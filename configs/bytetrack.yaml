@@ -1,0 +1,8 @@
+# ByteTrack Tracker Configuration
+tracker_type: bytetrack
+track_high_thresh: 0.3      # Yüksek skorlu tespit eşiği
+track_low_thresh: 0.05      # Düşük skorlu tespit eşiği (ByteTrack'in avantajı)
+new_track_thresh: 0.4       # Yeni track oluşturma eşiği
+track_buffer: 45            # Kayıp track'i tutma süresi (kare)
+match_thresh: 0.75          # IoU eşleştirme eşiği
+fuse_score: true            # Tespit skoru ile IoU'yu birleştir

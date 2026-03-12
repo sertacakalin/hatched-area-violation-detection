@@ -1,0 +1,18 @@
+# YOLOv8 Araç Tespiti Veri Seti Konfigürasyonu
+# Fine-tuning için İstanbul trafik verisi
+
+path: ../data/datasets/vehicle_detection
+train: images/train
+val: images/val
+test: images/test
+
+# Sınıflar (COCO ile uyumlu subset)
+names:
+  0: car
+  1: bus
+  2: truck
+  3: motorcycle
+  4: minibus
+
+# Eğitim parametreleri (referans)
+# ultralytics CLI: yolo detect train data=configs/dataset_vehicle.yaml model=yolov8s.pt epochs=150

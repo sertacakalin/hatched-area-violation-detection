@@ -1,0 +1,13 @@
+# BoT-SORT Tracker Configuration
+tracker_type: botsort
+track_high_thresh: 0.3
+track_low_thresh: 0.05
+new_track_thresh: 0.4
+track_buffer: 45
+match_thresh: 0.75
+fuse_score: true
+# BoT-SORT spesifik
+gmc_method: sparseOptFlow    # Global motion compensation yöntemi
+proximity_thresh: 0.5
+appearance_thresh: 0.25
+with_reid: false             # ReID modeli (opsiyonel)
