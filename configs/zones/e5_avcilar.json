@@ -1,0 +1,19 @@
+{
+  "camera_id": "e5_avcilar",
+  "description": "E-5 Otoyolu Avcılar - üst geçitten çekim (portrait 1080x1920). Şerit ayrım noktasındaki üçgen taralı alan.",
+  "frame_width": 1080,
+  "frame_height": 1920,
+  "zones": [
+    {
+      "zone_id": "zone_01",
+      "name": "Tarali Alan",
+      "polygon": [
+        [620, 640],
+        [780, 640],
+        [780, 800],
+        [620, 800]
+      ],
+      "type": "hatched_area"
+    }
+  ]
+}

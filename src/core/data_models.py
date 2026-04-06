@@ -91,3 +91,8 @@ class ViolationEvent:
     vehicle_crop: Optional[np.ndarray] = None
     frame_image: Optional[np.ndarray] = None
     metadata: dict = field(default_factory=dict)
+    # Yörünge + şiddet skorlama alanları
+    severity_score: float = 0.0
+    severity_level: str = ""
+    violation_type: str = ""
+    trajectory_metrics: dict = field(default_factory=dict)

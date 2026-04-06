@@ -1,5 +1,6 @@
 """İhlal kayıt sistemi — veritabanı + dosya sistemi."""
 
+import json
 import logging
 from pathlib import Path
 
@@ -66,6 +67,9 @@ class ViolationLogger:
         # Bbox'ı string olarak sakla
         bbox_str = ",".join(map(str, event.vehicle_bbox.astype(int).tolist()))
 
+        # Trajectory metrikleri JSON
+        traj_json = json.dumps(event.trajectory_metrics, ensure_ascii=False) if event.trajectory_metrics else None
+
         # Veritabanına kaydet
         self.db.insert_violation({
             "event_id": event.event_id,
@@ -83,6 +87,10 @@ class ViolationLogger:
             "plate_valid": plate_valid,
             "city_code": city_code,
             "city_name": city_name,
+            "severity_score": event.severity_score,
+            "severity_level": event.severity_level,
+            "violation_type": event.violation_type,
+            "trajectory_metrics": traj_json,
             "vehicle_crop_path": crop_path,
             "frame_image_path": frame_path,
             "video_source": self.video_source,
@@ -91,6 +99,8 @@ class ViolationLogger:
         logger.info(
             f"İhlal kaydedildi: {event.event_id} | "
             f"Track: {event.track_id} | "
+            f"Skor: {event.severity_score} ({event.severity_level}) | "
+            f"Tip: {event.violation_type} | "
             f"Plaka: {plate_text or 'okunamadı'}"
         )
 

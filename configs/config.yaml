@@ -5,7 +5,7 @@
 # --- Genel ---
 general:
   device: "auto"          # "auto", "cuda:0", "cpu"
-  video_source: "data/videos/test/sample.mp4"
+  video_source: "data/videos/test/test_01.mp4"
   output_dir: "results"
   save_video: true
   show_display: false     # Colab'da false, yerelde true
@@ -18,7 +18,7 @@ vehicle_detection:
   iou_threshold: 0.45
   classes: [2, 3, 5, 7]   # car, motorcycle, bus, truck (COCO IDs)
   img_size: 640
-  half_precision: true     # FP16 — GPU'da hız artışı
+  half_precision: false    # CPU'da FP16 desteklenmez
 
 # --- Araç Takibi ---
 tracking:
@@ -27,7 +27,7 @@ tracking:
 
 # --- Bölge (ROI) ---
 zone:
-  zone_file: "configs/zones/camera_01.json"
+  zone_file: "configs/zones/e5_avcilar.json"
   polygon_buffer: -10      # Negatif = içe doğru küçült (piksel)
   min_overlap_ratio: 0.3   # Araç bbox'ının bölge ile minimum örtüşme oranı
 

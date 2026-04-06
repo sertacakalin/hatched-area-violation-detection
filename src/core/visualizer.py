@@ -61,14 +61,20 @@ class Visualizer:
 
     def draw_violation_event(self, frame: np.ndarray,
                              event: ViolationEvent) -> np.ndarray:
-        """İhlal olayını çiz (bbox + plaka bilgisi)."""
+        """İhlal olayını çiz (bbox + şiddet skoru + plaka bilgisi)."""
         x1, y1, x2, y2 = event.vehicle_bbox.astype(int)
         cv2.rectangle(frame, (x1, y1), (x2, y2), self.COLOR_VIOLATION, 3)
+
+        # Şiddet skoru + ihlal tipi
+        severity_label = f"SKOR: {event.severity_score:.0f} | {event.violation_type}"
+        if event.severity_level:
+            severity_label += f" [{event.severity_level}]"
+        self._put_label(frame, severity_label, (x1, y2 + 20), self.COLOR_VIOLATION)
 
         # Plaka bilgisi
         if event.plate and event.plate.plate_text:
             plate_label = f"PLAKA: {event.plate.plate_text} ({event.plate.confidence:.2f})"
-            self._put_label(frame, plate_label, (x1, y2 + 20), self.COLOR_PLATE)
+            self._put_label(frame, plate_label, (x1, y2 + 45), self.COLOR_PLATE)
 
         return frame
 
