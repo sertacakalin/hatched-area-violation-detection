@@ -1,4 +1,4 @@
-"""Birleşik tracker arayüzü — ByteTrack, BoT-SORT, DeepSORT."""
+"""Tracker arayüzü ve factory (ByteTrack)."""
 
 from abc import ABC, abstractmethod
 
@@ -21,20 +21,19 @@ class BaseTracker(ABC):
         ...
 
 
-def create_tracker(tracker_type: str, config_path: str | None = None,
+def create_tracker(tracker_type: str = "bytetrack", config_path: str | None = None,
                    model_path: str = "yolov8s.pt", **kwargs) -> BaseTracker:
-    """Factory fonksiyonu — tracker tipine göre uygun wrapper'ı oluştur."""
+    """Factory fonksiyonu — ByteTrack wrapper döndürür.
+
+    Bitirme projesi kapsamında yalnızca ByteTrack kullanılır.
+    """
     tracker_type = tracker_type.lower()
 
-    if tracker_type == "bytetrack":
-        from src.tracking.bytetrack_wrapper import ByteTrackWrapper
-        return ByteTrackWrapper(config_path=config_path, model_path=model_path, **kwargs)
-    elif tracker_type == "botsort":
-        from src.tracking.botsort_wrapper import BoTSORTWrapper
-        return BoTSORTWrapper(config_path=config_path, model_path=model_path, **kwargs)
-    elif tracker_type == "deepsort":
-        from src.tracking.deepsort_wrapper import DeepSORTWrapper
-        return DeepSORTWrapper(config_path=config_path, model_path=model_path, **kwargs)
-    else:
-        raise ValueError(f"Bilinmeyen tracker tipi: {tracker_type}. "
-                         f"Desteklenen: bytetrack, botsort, deepsort")
+    if tracker_type != "bytetrack":
+        raise ValueError(
+            f"Desteklenmeyen tracker: {tracker_type}. "
+            f"Bu projede sadece 'bytetrack' kullanılır."
+        )
+
+    from src.tracking.bytetrack_wrapper import ByteTrackWrapper
+    return ByteTrackWrapper(config_path=config_path, model_path=model_path, **kwargs)

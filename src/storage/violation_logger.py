@@ -8,7 +8,6 @@ import cv2
 import numpy as np
 
 from src.core.data_models import ViolationEvent
-from src.alpr.plate_validator import PlateValidator
 from src.storage.database import ViolationDatabase
 
 logger = logging.getLogger(__name__)
@@ -27,7 +26,6 @@ class ViolationLogger:
         self.crops_dir.mkdir(parents=True, exist_ok=True)
         self.frames_dir.mkdir(parents=True, exist_ok=True)
         self.video_source = video_source
-        self.validator = PlateValidator()
 
     def log_violation(self, event: ViolationEvent) -> None:
         """İhlal olayını kaydet."""
@@ -44,25 +42,6 @@ class ViolationLogger:
             frame_filename = f"frame_{event.event_id}_f{event.frame_number}.jpg"
             frame_path = str(self.frames_dir / frame_filename)
             cv2.imwrite(frame_path, event.frame_image)
-
-        # Plaka bilgisi
-        plate_text = ""
-        plate_raw = ""
-        plate_conf = 0.0
-        plate_valid = 0
-        city_code = None
-        city_name = None
-
-        if event.plate:
-            plate_text = event.plate.plate_text
-            plate_raw = event.plate.raw_text
-            plate_conf = event.plate.confidence
-            plate_valid = 1 if event.plate.is_valid else 0
-
-            if event.plate.is_valid:
-                detail = self.validator.validate_detailed(plate_text)
-                city_code = detail.get("city_code")
-                city_name = detail.get("city_name")
 
         # Bbox'ı string olarak sakla
         bbox_str = ",".join(map(str, event.vehicle_bbox.astype(int).tolist()))
@@ -81,12 +60,6 @@ class ViolationLogger:
             "vehicle_bbox": bbox_str,
             "zone_id": event.zone_id,
             "frames_in_zone": event.frames_in_zone,
-            "plate_text": plate_text,
-            "plate_raw": plate_raw,
-            "plate_confidence": plate_conf,
-            "plate_valid": plate_valid,
-            "city_code": city_code,
-            "city_name": city_name,
             "severity_score": event.severity_score,
             "severity_level": event.severity_level,
             "violation_type": event.violation_type,
@@ -100,8 +73,7 @@ class ViolationLogger:
             f"İhlal kaydedildi: {event.event_id} | "
             f"Track: {event.track_id} | "
             f"Skor: {event.severity_score} ({event.severity_level}) | "
-            f"Tip: {event.violation_type} | "
-            f"Plaka: {plate_text or 'okunamadı'}"
+            f"Tip: {event.violation_type}"
         )
 
     def get_statistics(self) -> dict:

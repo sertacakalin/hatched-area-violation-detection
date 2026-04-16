@@ -1,43 +1,25 @@
-# Core
+# Core: detection + tracking + video I/O
 ultralytics>=8.1.0
 opencv-python>=4.8.0
 numpy>=1.24.0
 Pillow>=10.0.0
-
-# Tracking
 lap>=0.4.0
 
-# Geometry
+# Geometry (polygon zone checks)
 shapely>=2.0.0
 
-# OCR
-paddlepaddle>=2.5.0
-paddleocr>=2.7.0
-easyocr>=1.7.0
-
-# Storage
-# sqlite3 is built-in
-
-# Dashboard
-streamlit>=1.30.0
+# Web demo (Gradio)
+gradio>=4.0.0
 plotly>=5.18.0
 pandas>=2.0.0
 
-# Gradio Web Demo
-gradio>=4.0.0
-
-# Configuration
+# Config
 PyYAML>=6.0
-pydantic>=2.0.0
 
-# Notebooks / Evaluation
+# Evaluation & plotting (thesis figures)
 matplotlib>=3.7.0
 seaborn>=0.13.0
-scikit-learn>=1.3.0
 tqdm>=4.66.0
 
-# Video download (optional)
-yt-dlp>=2023.12.0
-
-# Roboflow (optional, for dataset management)
+# Dataset management (Colab notebooks)
 roboflow>=1.1.0

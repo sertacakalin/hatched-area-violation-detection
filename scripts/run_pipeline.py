@@ -18,6 +18,8 @@ def main():
     parser.add_argument("--zone", help="Bölge JSON dosya yolu (config override)")
     parser.add_argument("--tracker", choices=["bytetrack", "botsort", "deepsort"],
                         help="Tracker tipi (config override)")
+    parser.add_argument("--weights", help="YOLO model ağırlık dosyası (config override)")
+    parser.add_argument("--classes", help="Tespit edilecek sınıf ID'leri, virgülle ayrılmış. Örn: '0,1,2,3'")
     parser.add_argument("--output", help="Çıktı dizini (config override)")
     parser.add_argument("--show", action="store_true", help="Canlı görüntü göster")
     parser.add_argument("--no-save", action="store_true", help="Video kaydetme")
@@ -32,6 +34,10 @@ def main():
     if args.tracker:
         overrides["tracking.tracker_type"] = args.tracker
         overrides["tracking.config_path"] = f"configs/{args.tracker}.yaml"
+    if args.weights:
+        overrides["vehicle_detection.model_path"] = args.weights
+    if args.classes:
+        overrides["vehicle_detection.classes"] = [int(c) for c in args.classes.split(",")]
     if args.output:
         overrides["general.output_dir"] = args.output
     if args.show:

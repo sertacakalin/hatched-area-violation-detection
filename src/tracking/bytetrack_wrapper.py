@@ -34,7 +34,7 @@ class ByteTrackWrapper(BaseTracker):
     def update(self, detections: list[Detection] | None,
                frame: np.ndarray) -> list[TrackedObject]:
         """Kareyi track et ve TrackedObject listesi döndür."""
-        from src.detection.vehicle_detector import COCO_VEHICLE_CLASSES
+        model_names = self.model.names  # {class_id: name} — modelden gelir
 
         results = self.model.track(
             source=frame,
@@ -58,7 +58,7 @@ class ByteTrackWrapper(BaseTracker):
                 cls_ids = result.boxes.cls.cpu().numpy().astype(int)
 
                 for bbox, tid, conf, cls_id in zip(boxes, track_ids, confs, cls_ids):
-                    class_name = COCO_VEHICLE_CLASSES.get(cls_id, f"class_{cls_id}")
+                    class_name = model_names.get(int(cls_id), f"class_{cls_id}")
                     det = Detection(
                         bbox=bbox,
                         confidence=float(conf),

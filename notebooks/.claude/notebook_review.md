@@ -4,8 +4,8 @@ Generated: 2026-04-05
 ## KRITIK SORUN (ONCE COZULMELI)
 
 ### HARDCODED API KEY — 2 notebook'ta var
-- `03_vehicle_detection_finetuning.ipynb` Cell 4: `api_key="xT8j6ce4kyhvsVRwSaFr"`
-- `11_master_pipeline.ipynb` Cell 7: `api_key='xT8j6ce4kyhvsVRwSaFr'`
+- `03_vehicle_detection_finetuning.ipynb` Cell 4: `api_key="[ROTATED — use Colab Secrets]"`
+- `11_master_pipeline.ipynb` Cell 7: `api_key='[ROTATED — use Colab Secrets]'`
 
 Bu key zaten daha once bulunmustu. Hala duzeltilmemis. Roboflow'a giris yap, API key'i ROTATE et, sonra her iki notebook'ta da su hale getir:
 ```python
@@ -71,7 +71,7 @@ Colab'da: Secrets panelinden ROBOFLOW_API_KEY ekle, `userdata.get('ROBOFLOW_API_
 **Calisir mi:** API key degistirilince calisir.
 
 **Sorunlar:**
-1. HARDCODED API KEY: `api_key="xT8j6ce4kyhvsVRwSaFr"` — KRITIK, hemen duzelt.
+1. HARDCODED API KEY: `api_key="[ROTATED — use Colab Secrets]"` — KRITIK, hemen duzelt.
 2. Drive mount: VAR ve dogru.
 3. pip install: `!pip install ultralytics roboflow -q` — var, dogru.
 4. GPU kontrolu: var ve uyariliyor.
@@ -207,7 +207,7 @@ x1, y1, x2, y2 = [int(x) for x in v_data['bbox']]
 **Calisir mi:** API key duzeltilince ve pipeline_code.zip Drive'a yuklendikten sonra calisir.
 
 **Sorunlar:**
-1. HARDCODED API KEY: Cell 7'de `api_key='xT8j6ce4kyhvsVRwSaFr'` — KRITIK, hemen duzelt.
+1. HARDCODED API KEY: Cell 7'de `api_key='[ROTATED — use Colab Secrets]'` — KRITIK, hemen duzelt.
 2. `pipeline_code.zip` Drive'a yuklenmeyi bekliyor — Cell 4 bunu kontrol ediyor ve uyariliyor. Bu akis dogru.
 3. VIDEO_DIR: `'istanbul_trafik_kayit'` — 00'daki `'İstanbul Trafiği Kayıt'` ile uyumsuz. Kendi Drive'indaki gercek ismi yaz.
 4. Cell 21 `GROUND_TRUTH` tamamen bos — P/R/F1 hesaplanabilmesi icin videolari izleyip doldurman gerekiyor.

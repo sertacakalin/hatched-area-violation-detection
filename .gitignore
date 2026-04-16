@@ -1,14 +1,31 @@
-# Data & Weights (large files)
-data/
-weights/
-*.pt
-*.onnx
-*.engine
+# ── Large / regenerable / external assets ─────────────────────────────
+# Raw videos, Roboflow exports, and model weights live in Google Drive
+# and Roboflow. Git only tracks the small files needed to reproduce the
+# experiments: configs, ground truth JSONs, and READMEs.
 
-# Results (regenerable)
+# Raw videos and frame dumps
+data/videos/
+data/datasets/
+data/ground_truth/frames_*/
+data/sample_*.mp4
+
+# Model checkpoints (pulled from Drive via download_weights.py)
+weights/*.pt
+weights/*.onnx
+weights/*.engine
+
+# Pipeline outputs (regenerable)
 results/
 
-# Python
+# Always track: READMEs and ground truth JSONs, even though parent dirs are ignored
+!data/README.md
+!data/ground_truth/
+data/ground_truth/*
+!data/ground_truth/*.json
+!data/ground_truth/README.md
+!weights/README.md
+
+# ── Python ─────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
@@ -36,9 +53,6 @@ env/
 .DS_Store
 Thumbs.db
 
-# Streamlit
-.streamlit/
-
-# Database
+# SQLite databases (regenerable)
 *.db
 *.sqlite3

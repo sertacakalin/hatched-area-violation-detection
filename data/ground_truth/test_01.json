@@ -1,0 +1,17 @@
+{
+  "video": "test_01.mp4",
+  "fps": 30,
+  "annotator": "Sertaç Akalın",
+  "description": "E-5 Avcılar hatched area violations — ground truth reference.",
+  "instructions": "Fill the violations array by watching the video frame by frame. See data/ground_truth/README.md for schema and labeling policy.",
+  "violations": [
+    {
+      "id": "EXAMPLE_DELETE_ME",
+      "start_frame": 0,
+      "end_frame": 0,
+      "vehicle_class": "car",
+      "type": "LANE_CHANGE",
+      "notes": "Placeholder. Delete this entry and add real annotations."
+    }
+  ]
+}

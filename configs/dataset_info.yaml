@@ -1,0 +1,95 @@
+# ============================================================
+# Dataset & Fine-Tuning Provenance
+# ============================================================
+# This file is the single source of truth for WHERE the data came from
+# and HOW the fine-tuned model was produced. Thesis Section 4 (Dataset)
+# and Section 7 (Experiments) pull their numbers from here.
+#
+# Git tracks this file. The actual images/weights live in Roboflow and
+# Google Drive — see data/README.md and weights/README.md for pull
+# instructions.
+# ============================================================
+
+dataset:
+  name: istanbul-traffic-vehicles
+  # Roboflow workspace/project/version — used for reproducibility and citation
+  roboflow:
+    workspace: TODO_YOUR_ROBOFLOW_WORKSPACE_SLUG   # e.g. "sertacs-workspace"
+    project:   TODO_YOUR_ROBOFLOW_PROJECT_SLUG     # e.g. "istanbul-traffic-vehicles"
+    version:   2                                   # confirmed from best.pt metadata
+    format:    yolov8
+    url:       TODO_PASTE_ROBOFLOW_PUBLIC_URL
+
+  classes:
+    - bus
+    - car
+    - motorcycle
+    - truck
+  num_classes: 4
+
+  # Fill these in from Roboflow "Dataset" → "Generate" page or local export
+  statistics:
+    total_frames:      TODO   # total annotated images
+    train_frames:      TODO
+    val_frames:        TODO
+    test_frames:       TODO   # 0 if you didn't keep a held-out split
+    annotations_total: TODO   # number of bounding boxes across all classes
+    class_counts:
+      bus:        TODO
+      car:        TODO
+      motorcycle: TODO
+      truck:      TODO
+
+  source_videos:
+    location: "Google Drive: MyDrive/İstanbul Trafiği Kayıt/"
+    cameras:  TODO   # how many distinct overpass locations?
+    notes:    "Recorded personally from E-5 Avcılar overpasses, daytime, fair weather."
+
+  preprocessing:
+    resize: [640, 640]
+    letterbox: true
+  augmentations:
+    horizontal_flip:  true
+    hsv_jitter:       true
+    mosaic:           true
+    vertical_flip:    false
+    rotation:         false
+
+# ------------------------------------------------------------
+# Fine-tuning run — values extracted from weights/best.pt metadata
+# ------------------------------------------------------------
+training:
+  base_model:   yolov8s.pt            # COCO-pretrained
+  data_yaml:    "/content/istanbul-traffic-vehicles-2/data.yaml"
+  epochs_max:   50
+  batch_size:   16
+  image_size:   640
+  optimizer:    auto                  # resolves to SGD + cosine annealing
+  lr0:          0.01
+  lrf:          0.01
+  momentum:     0.937
+  weight_decay: 0.0005
+  patience:     10                    # early stopping
+  device:       T4                    # Google Colab
+  run_date:     "2026-04-05"
+  drive_run_dir: "/content/drive/MyDrive/tez_models/istanbul_finetune4"
+
+  # Fill these from {drive_run_dir}/results.csv (last row) or runs/detect/.../results.csv
+  final_metrics:
+    precision:   TODO
+    recall:      TODO
+    mAP50:       TODO
+    mAP50_95:    TODO
+    box_loss:    TODO
+    cls_loss:    TODO
+    dfl_loss:    TODO
+    epochs_actual: TODO   # may be <50 if early stopping triggered
+
+# ------------------------------------------------------------
+# Reproducibility pointers
+# ------------------------------------------------------------
+reproducibility:
+  training_notebook: "notebooks/03_vehicle_detection_finetuning.ipynb"
+  pipeline_entry:    "scripts/run_pipeline.py"
+  seed:              42
+  random_split_seed: 42

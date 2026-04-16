@@ -25,10 +25,6 @@ class TrajectoryMetrics:
     crossing_angle: float = 0.0          # Hareket yönü ile kenar arası açı (derece)
     penetration_depth: float = 0.0       # Bölge merkezine yaklaşma oranı (0-1)
     positions_in_zone: list[tuple[float, float]] = field(default_factory=list)
-    # Homografi ile hesaplanan gerçek dünya metrikleri (metre)
-    in_zone_distance_m: float | None = None   # Bölge içi mesafe (metre)
-    speed_kmh: float | None = None            # Ortalama hız (km/h)
-    penetration_depth_m: float | None = None  # Nüfuz derinliği (metre)
 
 
 class TrajectoryAnalyzer:
@@ -40,11 +36,9 @@ class TrajectoryAnalyzer:
     Pozisyon smoothing (EMA) ile bbox titremesi azaltılır.
     """
 
-    def __init__(self, max_history: int = 300, ema_alpha: float = 0.3,
-                 homography=None):
+    def __init__(self, max_history: int = 300, ema_alpha: float = 0.3):
         self.max_history = max_history
         self.ema_alpha = ema_alpha  # 0 = tam smooth, 1 = smoothing yok
-        self.homography = homography  # HomographyTransformer veya None
         # track_id → konum listesi [(x, y), ...]
         self._histories: dict[int, list[tuple[float, float]]] = {}
         # track_id → bölge-içi konumlar
@@ -125,19 +119,6 @@ class TrajectoryAnalyzer:
             metrics.crossing_angle = self._calc_crossing_angle(
                 entry_point, zone_positions, zone_polygon
             )
-
-        # Homografi varsa gerçek dünya metriklerini hesapla
-        if self.homography is not None and self.homography.is_calibrated:
-            try:
-                world_positions = [
-                    self.homography.pixel_to_world(p) for p in zone_positions
-                ]
-                metrics.in_zone_distance_m = self._calc_total_distance(world_positions)
-                metrics.speed_kmh = self.homography.estimate_speed(
-                    zone_positions, 30.0  # fps
-                )
-            except Exception as e:
-                logger.warning(f"Homografi hesaplama hatası: {e}")
 
         return metrics
 

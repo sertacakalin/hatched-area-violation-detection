@@ -22,7 +22,7 @@ vehicle_detection:
 
 # --- Araç Takibi ---
 tracking:
-  tracker_type: "bytetrack"   # "bytetrack", "botsort", "deepsort"
+  tracker_type: "bytetrack"
   config_path: "configs/bytetrack.yaml"
 
 # --- Bölge (ROI) ---
@@ -41,31 +41,6 @@ violation:
     - INSIDE
     - VIOLATION
 
-# --- Plaka Tespiti ---
-plate_detection:
-  model_path: "weights/plate_detector.pt"
-  confidence_threshold: 0.5
-  img_size: 640
-
-# --- Plaka OCR ---
-plate_ocr:
-  engine: "paddleocr"      # "paddleocr" veya "easyocr"
-  paddleocr:
-    lang: "en"
-    det: false             # Sadece tanıma (recognition)
-    rec: true
-    use_angle_cls: true
-    rec_algorithm: "SVTR_LCNet"
-  easyocr:
-    lang_list: ["en"]
-    gpu: true
-
-# --- Plaka Doğrulama ---
-plate_validation:
-  # Türk plaka formatı: il kodu (01-81) + harf(ler) + rakam(lar)
-  pattern: "^(0[1-9]|[1-7][0-9]|8[01])\\s?[A-Z]{1,3}\\s?\\d{2,4}$"
-  min_confidence: 0.6
-
 # --- Görselleştirme ---
 visualization:
   bbox_color_vehicle: [0, 255, 0]     # Yeşil (BGR)
@@ -78,9 +53,3 @@ visualization:
 # --- Veritabanı ---
 database:
   path: "results/violations.db"
-
-# --- Dashboard ---
-dashboard:
-  host: "0.0.0.0"
-  port: 8501
-  page_title: "Taralı Alan İhlal Tespit Sistemi"
