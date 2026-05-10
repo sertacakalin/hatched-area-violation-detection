@@ -12,13 +12,17 @@ general:
   log_level: "INFO"
 
 # --- Araç Tespiti ---
+# best_v3.pt: yolov8m fine-tune (100 epoch, lr=1e-3, final_v3 dataset)
+# Sınıflar:   {0:bus, 1:car, 2:motorcycle, 3:truck}
+# Metrikler:  mAP50=0.808, mAP50-95=0.653, P=0.765, R=0.787
 vehicle_detection:
-  model_path: "yolov8s.pt"
-  confidence_threshold: 0.35
+  model_path: "weights/best_v3.pt"
+  confidence_threshold: 0.55  # 0.35 → 0.55 (file2_dense noise filtrele)
   iou_threshold: 0.45
-  classes: [2, 3, 5, 7]   # car, motorcycle, bus, truck (COCO IDs)
+  classes: [0, 1, 2, 3]   # bus, car, motorcycle, truck (best_v3.pt sınıf sırası)
   img_size: 640
   half_precision: false    # CPU'da FP16 desteklenmez
+  max_bbox_ratio: 0.25     # Frame'in %25'inden büyük bbox'lar suspect (yakın kamera)
 
 # --- Araç Takibi ---
 tracking:
@@ -34,7 +38,8 @@ zone:
 # --- İhlal Tespiti ---
 violation:
   min_frames_in_zone: 5    # Minimum kare sayısı (temporal filtre)
-  cooldown_frames: 90      # Aynı araç için tekrar ihlal süresi (3 sn @ 30fps)
+  cooldown_frames: 600     # Aynı araç için tekrar ihlal süresi (20 sn @ 30fps)
+  per_track_lock: true     # Aynı track_id daha önce ihlal yaptıysa bir daha sayma
   states:
     - OUTSIDE
     - ENTERING
@@ -49,6 +54,28 @@ visualization:
   zone_alpha: 0.3                     # Yarı şeffaf overlay
   font_scale: 0.6
   thickness: 2
+
+# --- Plaka Tanıma ---
+# Real-time'ı bozmamak için sadece VIOLATION onaylandığında çalışır.
+# update_buffer her frame'de aktif track'lerin vehicle crop'unu kuyruğa
+# ekler; recognize() buffer üzerinde best-frame voting yapar.
+plate:
+  enabled: true
+  detector:
+    model_path: "weights/plate.pt"     # YOLOv8n fine-tuned (notebook 06)
+    confidence_threshold: 0.25
+    iou_threshold: 0.45
+    img_size: 640
+    half: false                         # CPU/MPS'te FP16 desteklenmez
+  ocr:
+    backend: "easyocr"                  # "easyocr" | "paddleocr" (gelecek)
+    languages: ["en"]                   # Latin karakter setine yeter
+    use_gpu: false                      # Mac'te kapalı; CUDA'lı makinede true
+  recognizer:
+    buffer_size: 10                     # Track başına son N frame
+    min_plate_conf: 0.25                # Plaka detect skoru altında atla
+    topk_for_ocr: 3                     # En iyi K crop'a OCR uygula
+    valid_format_bonus: 1.5             # TR formatına uyan sonuca verilen bonus
 
 # --- Veritabanı ---
 database:

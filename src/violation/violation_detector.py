@@ -35,10 +35,12 @@ class ViolationDetector:
         min_overlap_ratio: float = 0.3,
         use_bottom_center: bool = True,
         severity_weights: dict | None = None,
+        per_track_lock: bool = True,
     ):
         self.zone_manager = zone_manager
         self.min_overlap_ratio = min_overlap_ratio
         self.use_bottom_center = use_bottom_center
+        self.per_track_lock = per_track_lock
         self.state_machine = VehicleStateMachine(
             min_frames_in_zone=min_frames_in_zone,
             cooldown_frames=cooldown_frames,
@@ -50,6 +52,8 @@ class ViolationDetector:
         self._severity_scores: list[float] = []
         self._violation_types: dict[str, int] = {}
         self._severity_levels: dict[str, int] = {}
+        # per_track_lock: aynı track_id ihlal yaptıysa video boyunca bir daha sayma
+        self._violated_tracks: set[int] = set()
 
     def process_frame(
         self,
@@ -57,14 +61,20 @@ class ViolationDetector:
         frame: np.ndarray,
         frame_number: int,
         fps: float = 30.0,
+        extra_active_ids: set[int] | None = None,
     ) -> tuple[list[TrackedObject], list[ViolationEvent]]:
         """Bir karedeki tüm takip edilen araçları işle.
+
+        Args:
+            extra_active_ids: Bu frame'de tracker tarafından filtrelenmiş ama
+                hala ByteTrack havuzunda canlı olan ID'ler. State machine'in
+                bu track'leri "kayıp" sayıp state'i silmesini engeller.
 
         Returns:
             (güncellenen tracked_objects, yeni ihlal olayları)
         """
         new_violations = []
-        active_ids = set()
+        active_ids: set[int] = set(extra_active_ids) if extra_active_ids else set()
 
         for obj in tracked_objects:
             active_ids.add(obj.track_id)
@@ -101,6 +111,15 @@ class ViolationDetector:
 
             # Yeni ihlal olayı oluştur
             if is_new_violation:
+                # Per-track lock: aynı araç bir kez ihlal yapmışsa event üretme.
+                # State machine VIOLATION'a geçti ama bu re-entry; obj.state'i
+                # INSIDE'a geri al ki visualizer kırmızı "IHLAL" çizmesin
+                # (DB'de satır olmazken videoda flash görünmesin).
+                if self.per_track_lock and obj.track_id in self._violated_tracks:
+                    obj.state = VehicleState.INSIDE
+                    obj.is_violation = False
+                    continue
+                self._violated_tracks.add(obj.track_id)
                 self._violation_count += 1
                 event = self._create_violation_event(
                     obj, frame, frame_number, fps, zone_id
@@ -208,3 +227,4 @@ class ViolationDetector:
         self._severity_scores.clear()
         self._violation_types.clear()
         self._severity_levels.clear()
+        self._violated_tracks.clear()

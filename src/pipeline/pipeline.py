@@ -22,6 +22,42 @@ from src.storage.violation_logger import ViolationLogger
 logger = logging.getLogger(__name__)
 
 
+def _build_plate_recognizer(config: Config):
+    """Plaka tanıma aktifse PlateRecognizer döndürür, değilse None."""
+    if not config.get("plate.enabled", False):
+        logger.info("Plaka tanıma devre dışı (plate.enabled: false)")
+        return None
+    try:
+        from src.plate import PlateDetector, PlateOCR, PlateRecognizer
+    except ImportError as exc:
+        logger.warning(f"Plaka modülü yüklenemedi: {exc} — plaka tanıma kapalı")
+        return None
+    try:
+        detector = PlateDetector(
+            model_path=config.get("plate.detector.model_path", "weights/plate.pt"),
+            confidence_threshold=config.get("plate.detector.confidence_threshold", 0.25),
+            iou_threshold=config.get("plate.detector.iou_threshold", 0.45),
+            img_size=config.get("plate.detector.img_size", 640),
+            half=config.get("plate.detector.half", False),
+        )
+        ocr = PlateOCR(
+            languages=config.get("plate.ocr.languages", ["en"]),
+            use_gpu=config.get("plate.ocr.use_gpu", False),
+            backend=config.get("plate.ocr.backend", "easyocr"),
+        )
+        return PlateRecognizer(
+            detector=detector,
+            ocr=ocr,
+            buffer_size=config.get("plate.recognizer.buffer_size", 10),
+            min_plate_conf=config.get("plate.recognizer.min_plate_conf", 0.25),
+            topk_for_ocr=config.get("plate.recognizer.topk_for_ocr", 3),
+            valid_format_bonus=config.get("plate.recognizer.valid_format_bonus", 1.5),
+        )
+    except Exception as exc:
+        logger.warning(f"PlateRecognizer kurulamadı: {exc} — plaka tanıma kapalı")
+        return None
+
+
 class Pipeline:
     """Uçtan uca ihlal tespit pipeline'ı."""
 
@@ -45,6 +81,7 @@ class Pipeline:
             classes=config.get("vehicle_detection.classes", [2, 3, 5, 7]),
             img_size=config.get("vehicle_detection.img_size", 640),
             half=config.get("vehicle_detection.half_precision", True),
+            max_bbox_ratio=config.get("vehicle_detection.max_bbox_ratio", 0.25),
         )
 
         # Bölge Yönetimi (taralı alan polygon'u)
@@ -59,6 +96,7 @@ class Pipeline:
             min_frames_in_zone=config.get("violation.min_frames_in_zone", 5),
             cooldown_frames=config.get("violation.cooldown_frames", 90),
             min_overlap_ratio=config.get("zone.min_overlap_ratio", 0.3),
+            per_track_lock=config.get("violation.per_track_lock", True),
         )
 
         # Kayıt (SQLite + JSON)
@@ -67,6 +105,9 @@ class Pipeline:
             output_dir=config.get("general.output_dir", "results"),
             video_source=str(config.get("general.video_source", "")),
         )
+
+        # Plaka tanıma (opsiyonel — config.plate.enabled)
+        self.plate_recognizer = _build_plate_recognizer(config)
 
         # Görselleştirme
         self.visualizer = Visualizer(
@@ -78,7 +119,8 @@ class Pipeline:
         self._video_writer: cv2.VideoWriter | None = None
         self._total_violations = 0
 
-        logger.info("Pipeline hazır")
+        plate_status = "aktif" if self.plate_recognizer else "kapalı"
+        logger.info(f"Pipeline hazır (plaka tanıma: {plate_status})")
 
     def run(self) -> dict:
         """Pipeline'ı çalıştır ve sonuçları döndür."""
@@ -107,14 +149,34 @@ class Pipeline:
 
                 # 1. Tespit + Takip
                 tracked_objects = self.tracker.update(None, frame)
+                # Tracker'ın bu frame'de oversized diye attığı ama hala canlı
+                # olan track_id'leri — state machine bunlar için cleanup yapmasın
+                filtered_ids = getattr(
+                    self.tracker, "last_filtered_track_ids", set()
+                )
+
+                # 1b. Plaka ring buffer'ını güncelle (plaka aktifse)
+                if self.plate_recognizer is not None:
+                    self.plate_recognizer.update_buffer(
+                        tracked_objects, frame, frame_num
+                    )
 
                 # 2. İhlal tespiti (state machine + trajectory + severity)
                 tracked_objects, new_violations = self.violation_detector.process_frame(
-                    tracked_objects, frame, frame_num, fps
+                    tracked_objects, frame, frame_num, fps,
+                    extra_active_ids=filtered_ids,
                 )
 
-                # 3. Yeni ihlaller → kayıt
+                # 3. Yeni ihlaller → plaka tanı + kayıt
                 for event in new_violations:
+                    if self.plate_recognizer is not None:
+                        try:
+                            event.plate = self.plate_recognizer.recognize(event.track_id)
+                        except Exception as exc:
+                            logger.warning(
+                                f"Plaka tanıma hatası (track {event.track_id}): {exc}"
+                            )
+                            event.plate = None
                     self.violation_logger.log_violation(event)
                     self._total_violations += 1
 

@@ -23,3 +23,6 @@ tqdm>=4.66.0
 
 # Dataset management (Colab notebooks)
 roboflow>=1.1.0
+
+# Plaka tanıma (OCR)
+easyocr>=1.7.0

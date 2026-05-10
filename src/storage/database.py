@@ -7,7 +7,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-SCHEMA = """
+TABLE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS violations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id TEXT UNIQUE NOT NULL,
@@ -30,16 +30,37 @@ CREATE TABLE IF NOT EXISTS violations (
     violation_type TEXT,
     trajectory_metrics TEXT,
     vehicle_crop_path TEXT,
+    plate_crop_path TEXT,
     frame_image_path TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     video_source TEXT
 );
+"""
 
+INDEX_SCHEMA = """
 CREATE INDEX IF NOT EXISTS idx_violations_plate ON violations(plate_text);
 CREATE INDEX IF NOT EXISTS idx_violations_zone ON violations(zone_id);
 CREATE INDEX IF NOT EXISTS idx_violations_timestamp ON violations(timestamp_sec);
 CREATE INDEX IF NOT EXISTS idx_violations_created ON violations(created_at);
 """
+
+# Eski DB'lere eklenmesi gerekebilen kolonlar. (kolon_adı, ALTER ifadesi)
+# Sıra önemli — bir kolonu referans eden index'ten önce kolonu eklemeliyiz.
+_MIGRATION_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("plate_text", "ALTER TABLE violations ADD COLUMN plate_text TEXT"),
+    ("plate_raw", "ALTER TABLE violations ADD COLUMN plate_raw TEXT"),
+    ("plate_confidence", "ALTER TABLE violations ADD COLUMN plate_confidence REAL"),
+    ("plate_valid", "ALTER TABLE violations ADD COLUMN plate_valid INTEGER DEFAULT 0"),
+    ("city_code", "ALTER TABLE violations ADD COLUMN city_code TEXT"),
+    ("city_name", "ALTER TABLE violations ADD COLUMN city_name TEXT"),
+    ("severity_score", "ALTER TABLE violations ADD COLUMN severity_score REAL DEFAULT 0"),
+    ("severity_level", "ALTER TABLE violations ADD COLUMN severity_level TEXT"),
+    ("violation_type", "ALTER TABLE violations ADD COLUMN violation_type TEXT"),
+    ("trajectory_metrics", "ALTER TABLE violations ADD COLUMN trajectory_metrics TEXT"),
+    ("plate_crop_path", "ALTER TABLE violations ADD COLUMN plate_crop_path TEXT"),
+    ("created_at", "ALTER TABLE violations ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+    ("video_source", "ALTER TABLE violations ADD COLUMN video_source TEXT"),
+)
 
 
 class ViolationDatabase:
@@ -53,9 +74,23 @@ class ViolationDatabase:
 
     def _init_db(self) -> None:
         conn = self._get_connection()
-        conn.executescript(SCHEMA)
+        # Sıra: önce tablo (yoksa oluştur), sonra eksik kolonları ekle,
+        # en son index'leri oluştur — index'ler kolonlara bağlı, kolon
+        # olmadan index açmak hata verir.
+        conn.executescript(TABLE_SCHEMA)
+        self._migrate(conn)
+        conn.executescript(INDEX_SCHEMA)
         conn.commit()
         logger.info(f"Veritabanı hazır: {self.db_path}")
+
+    @staticmethod
+    def _migrate(conn: sqlite3.Connection) -> None:
+        """Eski DB'lere eksik kolonları ekle (idempotent)."""
+        existing = {row[1] for row in conn.execute("PRAGMA table_info(violations)")}
+        for col, alter_sql in _MIGRATION_COLUMNS:
+            if col not in existing:
+                conn.execute(alter_sql)
+                logger.info(f"DB migration: '{col}' kolonu eklendi")
 
     def _get_connection(self) -> sqlite3.Connection:
         if self._conn is None:
@@ -74,8 +109,8 @@ class ViolationDatabase:
              plate_text, plate_raw, plate_confidence, plate_valid,
              city_code, city_name,
              severity_score, severity_level, violation_type, trajectory_metrics,
-             vehicle_crop_path, frame_image_path, video_source)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+             vehicle_crop_path, plate_crop_path, frame_image_path, video_source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 data.get("event_id"),
                 data.get("track_id"),
@@ -97,6 +132,7 @@ class ViolationDatabase:
                 data.get("violation_type"),
                 data.get("trajectory_metrics"),
                 data.get("vehicle_crop_path"),
+                data.get("plate_crop_path"),
                 data.get("frame_image_path"),
                 data.get("video_source"),
             ),

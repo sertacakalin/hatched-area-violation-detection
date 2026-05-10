@@ -19,7 +19,8 @@ class ByteTrackWrapper(BaseTracker):
                  model_path: str = "yolov8s.pt",
                  conf: float = 0.35, iou: float = 0.45,
                  classes: list[int] | None = None,
-                 img_size: int = 640, half: bool = True, **kwargs):
+                 img_size: int = 640, half: bool = True,
+                 max_bbox_ratio: float = 0.25, **kwargs):
         self.config_path = config_path or str(
             Path(__file__).parent.parent.parent / "configs" / "bytetrack.yaml"
         )
@@ -29,12 +30,24 @@ class ByteTrackWrapper(BaseTracker):
         self.classes = classes or [2, 3, 5, 7]
         self.img_size = img_size
         self.half = half
-        logger.info(f"ByteTrack başlatıldı: config={self.config_path}")
+        self.max_bbox_ratio = max_bbox_ratio
+        # Bir önceki update()'te oversized olduğu için atlanan ama ByteTrack'in
+        # iç havuzunda hala canlı olan track_id'ler. ViolationDetector bu set'i
+        # active_ids'e ekleyerek state machine'in geçici kaybı state silmesini
+        # engeller (aksi halde bbox jitter'ı state'i her seferinde sıfırlar).
+        self._last_filtered_track_ids: set[int] = set()
+        logger.info(f"ByteTrack başlatıldı: config={self.config_path}, "
+                    f"conf={conf}, max_bbox_ratio={max_bbox_ratio}")
+
+    @property
+    def last_filtered_track_ids(self) -> set[int]:
+        return self._last_filtered_track_ids
 
     def update(self, detections: list[Detection] | None,
                frame: np.ndarray) -> list[TrackedObject]:
         """Kareyi track et ve TrackedObject listesi döndür."""
         model_names = self.model.names  # {class_id: name} — modelden gelir
+        self._last_filtered_track_ids = set()
 
         results = self.model.track(
             source=frame,
@@ -57,7 +70,21 @@ class ByteTrackWrapper(BaseTracker):
                 confs = result.boxes.conf.cpu().numpy()
                 cls_ids = result.boxes.cls.cpu().numpy().astype(int)
 
+                # Frame size for bbox ratio check
+                fh, fw = frame.shape[:2]
+                frame_area = fh * fw
+
                 for bbox, tid, conf, cls_id in zip(boxes, track_ids, confs, cls_ids):
+                    # Filter: bbox should not exceed max_bbox_ratio of frame.
+                    # ByteTrack ID'yi persist=True ile içeride tutmaya devam
+                    # eder; downstream'in state'i silmemesi için filtrelenen
+                    # ID'leri _last_filtered_track_ids'a yazıyoruz.
+                    bw = bbox[2] - bbox[0]
+                    bh = bbox[3] - bbox[1]
+                    if (bw * bh) / frame_area > self.max_bbox_ratio:
+                        self._last_filtered_track_ids.add(int(tid))
+                        continue
+
                     class_name = model_names.get(int(cls_id), f"class_{cls_id}")
                     det = Detection(
                         bbox=bbox,

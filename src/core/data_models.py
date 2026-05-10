@@ -73,6 +73,8 @@ class PlateResult:
     plate_bbox: Optional[np.ndarray] = None  # Plaka bbox'ı
     plate_image: Optional[np.ndarray] = None
     is_valid: bool = False     # Türk plaka formatına uygun mu
+    city_code: Optional[str] = None   # 01-81 (TR plaka il kodu)
+    city_name: Optional[str] = None   # "İstanbul", "Ankara", ...
 
 
 @dataclass

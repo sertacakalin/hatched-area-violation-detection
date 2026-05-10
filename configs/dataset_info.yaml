@@ -74,16 +74,18 @@ training:
   run_date:     "2026-04-05"
   drive_run_dir: "/content/drive/MyDrive/tez_models/istanbul_finetune4"
 
-  # Fill these from {drive_run_dir}/results.csv (last row) or runs/detect/.../results.csv
+  # Extracted from docs/figures/training/results.csv (best epoch = 16, best.pt criterion: mAP50-95)
   final_metrics:
-    precision:   TODO
-    recall:      TODO
-    mAP50:       TODO
-    mAP50_95:    TODO
-    box_loss:    TODO
-    cls_loss:    TODO
-    dfl_loss:    TODO
-    epochs_actual: TODO   # may be <50 if early stopping triggered
+    precision:   0.6389
+    recall:      0.5656
+    mAP50:       0.5969
+    mAP50_95:    0.4496
+    box_loss:    0.72702
+    cls_loss:    0.56471
+    dfl_loss:    0.87248
+    epochs_actual: 26      # early stopping (patience 10), best at epoch 16
+    best_epoch:    16
+    training_hours: 1.47
 
 # ------------------------------------------------------------
 # Reproducibility pointers
