@@ -2,38 +2,46 @@
 # Dataset & Fine-Tuning Provenance
 # ============================================================
 # This file is the single source of truth for WHERE the data came from
-# and HOW the fine-tuned model was produced. Thesis Section 4 (Dataset)
-# and Section 7 (Experiments) pull their numbers from here.
+# and HOW the fine-tuned models were produced. Thesis Section 4
+# (Dataset) and Section 7 (Experiments) pull their numbers from here.
 #
 # Git tracks this file. The actual images/weights live in Roboflow and
 # Google Drive — see data/README.md and weights/README.md for pull
 # instructions.
+#
+# Three datasets are documented here:
+#   1. dataset_v1   → produced weights/best.pt    (legacy yolov8s)
+#   2. dataset_v3   → produced weights/best_v3.pt (PRODUCTION yolov8m)
+#   3. dataset_plate → produced weights/plate.pt  (TR plate detector)
 # ============================================================
 
-dataset:
+# ============================================================
+# 1) Vehicle dataset v1 — produced best.pt (legacy)
+# ============================================================
+dataset_v1:
   name: istanbul-traffic-vehicles
-  # Roboflow workspace/project/version — used for reproducibility and citation
+  status: legacy                                  # superseded by v3
+  produced_weights: weights/best.pt
   roboflow:
-    workspace: TODO_YOUR_ROBOFLOW_WORKSPACE_SLUG   # e.g. "sertacs-workspace"
-    project:   TODO_YOUR_ROBOFLOW_PROJECT_SLUG     # e.g. "istanbul-traffic-vehicles"
-    version:   2                                   # confirmed from best.pt metadata
+    workspace: TODO_FILL_FROM_ROBOFLOW_URL        # see docs/PROJECT_FINAL_CHECKLIST.md
+    project:   istanbul-traffic-vehicles
+    version:   2                                  # confirmed from best.pt train_args
     format:    yolov8
     url:       TODO_PASTE_ROBOFLOW_PUBLIC_URL
 
-  classes:
+  classes:                                        # confirmed from best.pt names
     - bus
     - car
     - motorcycle
     - truck
   num_classes: 4
 
-  # Fill these in from Roboflow "Dataset" → "Generate" page or local export
   statistics:
-    total_frames:      TODO   # total annotated images
+    total_frames:      TODO   # Roboflow → Dataset → Generate → Total Images
     train_frames:      TODO
     val_frames:        TODO
-    test_frames:       TODO   # 0 if you didn't keep a held-out split
-    annotations_total: TODO   # number of bounding boxes across all classes
+    test_frames:       TODO
+    annotations_total: TODO
     class_counts:
       bus:        TODO
       car:        TODO
@@ -55,43 +63,172 @@ dataset:
     vertical_flip:    false
     rotation:         false
 
+# ============================================================
+# 2) Vehicle dataset v3 — produced best_v3.pt (PRODUCTION)
+# ============================================================
+dataset_v3:
+  name: final_v3
+  status: production                              # default in configs/config.yaml
+  produced_weights: weights/best_v3.pt
+  roboflow:
+    workspace: TODO_FILL_FROM_ROBOFLOW_URL
+    project:   TODO_FILL_FROM_ROBOFLOW_URL        # final_v3 dataset slug
+    version:   TODO                               # latest version number
+    format:    yolov8
+    url:       TODO_PASTE_ROBOFLOW_PUBLIC_URL
+
+  classes:                                        # confirmed from best_v3.pt names
+    - bus
+    - car
+    - motorcycle
+    - truck
+  num_classes: 4
+
+  statistics:
+    total_frames:      TODO   # likely larger than v1; pull from Roboflow
+    train_frames:      TODO
+    val_frames:        TODO
+    test_frames:       TODO
+    annotations_total: TODO
+    class_counts:
+      bus:        TODO
+      car:        TODO
+      motorcycle: TODO
+      truck:      TODO
+
+  source_videos:
+    location: "Google Drive: MyDrive/İstanbul Trafiği Kayıt/"
+    cameras:  TODO
+    notes:    "v3 builds on v1 with additional hard-negative samples and overpass diversity."
+
+  preprocessing:
+    resize: [640, 640]
+    letterbox: true
+  augmentations:
+    horizontal_flip:  true
+    hsv_jitter:       true
+    mosaic:           true
+    vertical_flip:    false
+    rotation:         false
+
+# ============================================================
+# 3) Plate dataset — produced plate.pt
+# ============================================================
+dataset_plate:
+  name: TR-PLAKA-1
+  status: production
+  produced_weights: weights/plate.pt
+  roboflow:
+    workspace: TODO_FILL_FROM_ROBOFLOW_URL
+    project:   TR-PLAKA-1                         # confirmed from plate.pt train_args
+    version:   TODO
+    format:    yolov8
+    url:       TODO_PASTE_ROBOFLOW_PUBLIC_URL
+
+  classes:                                        # confirmed from plate.pt names
+    - license_plate
+  num_classes: 1
+
+  statistics:
+    total_frames:      TODO
+    train_frames:      TODO
+    val_frames:        TODO
+    test_frames:       TODO
+    annotations_total: TODO
+
+  source:
+    notes:    "Turkish license plate detection dataset (single-class). See notebooks/06_train_plate_detector.ipynb for training."
+
+  preprocessing:
+    resize: [640, 640]
+    letterbox: true
+
 # ------------------------------------------------------------
-# Fine-tuning run — values extracted from weights/best.pt metadata
+# Fine-tuning runs — values extracted from .pt train_args/train_metrics
 # ------------------------------------------------------------
 training:
-  base_model:   yolov8s.pt            # COCO-pretrained
-  data_yaml:    "/content/istanbul-traffic-vehicles-2/data.yaml"
-  epochs_max:   50
-  batch_size:   16
-  image_size:   640
-  optimizer:    auto                  # resolves to SGD + cosine annealing
-  lr0:          0.01
-  lrf:          0.01
-  momentum:     0.937
-  weight_decay: 0.0005
-  patience:     10                    # early stopping
-  device:       T4                    # Google Colab
-  run_date:     "2026-04-05"
-  drive_run_dir: "/content/drive/MyDrive/tez_models/istanbul_finetune4"
+  # === v1 (legacy) ===
+  v1:
+    base_model:    yolov8s.pt                     # COCO-pretrained
+    data_yaml:     "/content/istanbul-traffic-vehicles-2/data.yaml"
+    epochs_max:    50
+    batch_size:    16
+    image_size:    640
+    optimizer:     auto                           # SGD + cosine annealing
+    lr0:           0.01
+    lrf:           0.01
+    momentum:      0.937
+    weight_decay:  0.0005
+    patience:      10
+    device:        T4
+    run_date:      "2026-04-05"
+    drive_run_dir: "/content/drive/MyDrive/tez_models/istanbul_finetune4"
+    final_metrics:
+      precision:   0.6389
+      recall:      0.5656
+      mAP50:       0.5969
+      mAP50_95:    0.4496
+      box_loss:    0.72702
+      cls_loss:    0.56471
+      dfl_loss:    0.87248
+      epochs_actual: 26     # early stop (patience 10)
+      best_epoch:    16
+      training_hours: 1.47
 
-  # Extracted from docs/figures/training/results.csv (best epoch = 16, best.pt criterion: mAP50-95)
-  final_metrics:
-    precision:   0.6389
-    recall:      0.5656
-    mAP50:       0.5969
-    mAP50_95:    0.4496
-    box_loss:    0.72702
-    cls_loss:    0.56471
-    dfl_loss:    0.87248
-    epochs_actual: 26      # early stopping (patience 10), best at epoch 16
-    best_epoch:    16
-    training_hours: 1.47
+  # === v3 (PRODUCTION) ===
+  v3:
+    base_model:    yolov8m.pt                     # COCO-pretrained, medium (larger than v1)
+    data_yaml:     "/content/final_v3/data.yaml"
+    epochs_max:    100
+    batch_size:    16
+    image_size:    640
+    optimizer:     auto
+    lr0:           0.001                          # 10x lower than v1 (proper fine-tune)
+    momentum:      0.937
+    weight_decay:  0.0005
+    device:        T4
+    run_date:      TODO_FILL_FROM_DRIVE_RUN
+    drive_run_dir: TODO_FILL_FROM_DRIVE_RUN       # final_v3/ Drive folder
+    final_metrics:
+      precision:   0.7647
+      recall:      0.7873
+      mAP50:       0.8075
+      mAP50_95:    0.6530
+      epochs_actual: TODO                         # last row of results.csv
+      best_epoch:    TODO
+      training_hours: TODO
+
+  # === Plate ===
+  plate:
+    base_model:    yolov8n.pt
+    data_yaml:     "/content/TR-PLAKA-1/data.yaml"
+    epochs_max:    80
+    batch_size:    32
+    image_size:    640
+    optimizer:     auto
+    lr0:           0.001
+    momentum:      0.937
+    weight_decay:  0.0005
+    device:        T4
+    run_date:      TODO
+    drive_run_dir: TODO
+    final_metrics:
+      precision:   0.9560
+      recall:      0.9447
+      mAP50:       0.9815
+      mAP50_95:    0.8171
+      epochs_actual: TODO
+      best_epoch:    TODO
+      training_hours: TODO
 
 # ------------------------------------------------------------
 # Reproducibility pointers
 # ------------------------------------------------------------
 reproducibility:
-  training_notebook: "notebooks/03_vehicle_detection_finetuning.ipynb"
-  pipeline_entry:    "scripts/run_pipeline.py"
+  training_notebook_v1:    "notebooks/03_vehicle_detection_finetuning.ipynb"
+  training_notebook_v3:    "notebooks/05_train_mobese_v3.ipynb"   # WARN: needs to be committed
+  training_notebook_plate: "notebooks/06_train_plate_detector.ipynb"
+  pipeline_entry:          "scripts/run_pipeline.py"
+  evaluation_entry:        "scripts/evaluate_with_ground_truth.py"
   seed:              42
   random_split_seed: 42

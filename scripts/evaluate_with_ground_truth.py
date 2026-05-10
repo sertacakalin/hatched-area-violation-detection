@@ -169,8 +169,20 @@ def false_positive_analysis(results: dict) -> dict:
 
 
 def run_pipeline_collect(config_path: str, video: str, zone: str,
-                         tracker: str = "bytetrack") -> list[dict]:
-    """Pipeline'ı çalıştır ve tüm ihlal olaylarını topla."""
+                         tracker: str = "bytetrack",
+                         disable_plate: bool = True) -> list[dict]:
+    """Pipeline'ı çalıştır ve tüm ihlal olaylarını topla.
+
+    Production pipeline'ın TAM AKIŞINI çalıştırır — tracker.update +
+    plate buffer + violation_detector.process_frame(extra_active_ids=...)
+    + plate.recognize. Eski sürümde bu adımlar manuel kopyalanıyordu;
+    bug_002 fix (max_bbox_ratio state wipe) eval'a ulaşmıyordu. Artık
+    Pipeline.run() üzerinden gidiyor, eval == production.
+
+    Args:
+        disable_plate: Eval'da plate'i kapatmak hızı 5-10x artırır.
+            Plate accuracy ayrı evaluate edilir. Default True.
+    """
     overrides = {
         "general.video_source": video,
         "zone.zone_file": zone,
@@ -179,48 +191,45 @@ def run_pipeline_collect(config_path: str, video: str, zone: str,
         "general.save_video": False,
         "general.show_display": False,
     }
+    if disable_plate:
+        overrides["plate.enabled"] = False
 
     pipeline = create_pipeline(config_path, overrides)
-    violations = []
 
+    # Canlı progress için frame ilerlemesini bas
     import cv2
     cap = cv2.VideoCapture(video)
-    fps = cap.get(cv2.CAP_PROP_FPS)
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-    frame_num = 0
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        tracked_objects = pipeline.tracker.update(None, frame)
-        tracked_objects, new_violations = pipeline.violation_detector.process_frame(
-            tracked_objects, frame, frame_num, fps
-        )
-
-        for v in new_violations:
-            violations.append({
-                "event_id": v.event_id,
-                "track_id": v.track_id,
-                "frame_number": v.frame_number,
-                "timestamp": v.timestamp,
-                "vehicle_class": v.vehicle_class,
-                "vehicle_confidence": v.vehicle_confidence,
-                "zone_id": v.zone_id,
-                "frames_in_zone": v.frames_in_zone,
-                "severity_score": v.severity_score,
-                "severity_level": v.severity_level,
-                "violation_type": v.violation_type,
-                "trajectory_metrics": v.trajectory_metrics,
-            })
-
-        frame_num += 1
-        if frame_num % 500 == 0:
-            print(f"  Kare {frame_num}/{total} | İhlal: {len(violations)}")
-
     cap.release()
-    return violations
+
+    last_print = [0]
+
+    def _on_violation(ev):
+        # Sadece milestone'larda log basmak için frame_number'ı kullan
+        if ev.frame_number - last_print[0] >= 500:
+            print(f"  Kare {ev.frame_number}/{total} | "
+                  f"İhlal: {len(pipeline.events) + 1}")
+            last_print[0] = ev.frame_number
+
+    pipeline.run(on_violation=_on_violation)
+
+    return [
+        {
+            "event_id": v.event_id,
+            "track_id": v.track_id,
+            "frame_number": v.frame_number,
+            "timestamp": v.timestamp,
+            "vehicle_class": v.vehicle_class,
+            "vehicle_confidence": v.vehicle_confidence,
+            "zone_id": v.zone_id,
+            "frames_in_zone": v.frames_in_zone,
+            "severity_score": v.severity_score,
+            "severity_level": v.severity_level,
+            "violation_type": v.violation_type,
+            "trajectory_metrics": v.trajectory_metrics,
+        }
+        for v in pipeline.events
+    ]
 
 
 def main():
@@ -234,6 +243,8 @@ def main():
                         help="Eşleştirme toleransı (kare)")
     parser.add_argument("--output", default="results/evaluation",
                         help="Sonuç dizini")
+    parser.add_argument("--with-plate", action="store_true",
+                        help="Plaka tanımayı eval sırasında aç (yavaş)")
     args = parser.parse_args()
 
     output_dir = Path(args.output)
@@ -248,7 +259,8 @@ def main():
     print(f"Pipeline çalıştırılıyor: {args.video}")
     t_start = time.time()
     predictions = run_pipeline_collect(
-        args.config, args.video, args.zone, args.tracker
+        args.config, args.video, args.zone, args.tracker,
+        disable_plate=not args.with_plate,
     )
     elapsed = time.time() - t_start
     print(f"Pipeline tamamlandı: {len(predictions)} ihlal, {elapsed:.1f} sn")

@@ -8,10 +8,12 @@ Basitleştirilmiş akış:
 import logging
 import time
 from pathlib import Path
+from typing import Callable
 
 import cv2
 
 from src.core.config import Config
+from src.core.data_models import ViolationEvent
 from src.core.frame_provider import FrameProvider
 from src.core.visualizer import Visualizer
 from src.tracking.tracker import create_tracker
@@ -119,13 +121,33 @@ class Pipeline:
         self._video_writer: cv2.VideoWriter | None = None
         self._total_violations = 0
 
+        # Tüm onaylanmış ihlallerin in-memory listesi — eval/test gibi
+        # consumer'lar DB sorgulamadan doğrudan ViolationEvent'a erişebilsin.
+        # log_violation tarafından populate edilir.
+        self.events: list[ViolationEvent] = []
+
         plate_status = "aktif" if self.plate_recognizer else "kapalı"
         logger.info(f"Pipeline hazır (plaka tanıma: {plate_status})")
 
-    def run(self) -> dict:
-        """Pipeline'ı çalıştır ve sonuçları döndür."""
+    def run(
+        self,
+        on_violation: Callable[[ViolationEvent], None] | None = None,
+    ) -> dict:
+        """Pipeline'ı çalıştır ve sonuçları döndür.
+
+        Args:
+            on_violation: Her onaylanmış ihlalde sync olarak çağrılır.
+                Eval script'leri / Gradio canlı progress için kullanışlı.
+        """
         save_video = self.config.get("general.save_video", True)
         show_display = self.config.get("general.show_display", False)
+
+        # Aynı Pipeline objesinin iki kez çalıştırılması için temiz başlangıç
+        self.violation_detector.reset()
+        if self.plate_recognizer is not None:
+            self.plate_recognizer.reset()
+        self._total_violations = 0
+        self.events.clear()
 
         with self.frame_provider as fp:
             fps = fp.fps
@@ -153,7 +175,7 @@ class Pipeline:
                 # olan track_id'leri — state machine bunlar için cleanup yapmasın
                 filtered_ids = getattr(
                     self.tracker, "last_filtered_track_ids", set()
-                )
+                ) or set()
 
                 # 1b. Plaka ring buffer'ını güncelle (plaka aktifse)
                 if self.plate_recognizer is not None:
@@ -178,7 +200,13 @@ class Pipeline:
                             )
                             event.plate = None
                     self.violation_logger.log_violation(event)
+                    self.events.append(event)
                     self._total_violations += 1
+                    if on_violation is not None:
+                        try:
+                            on_violation(event)
+                        except Exception as exc:
+                            logger.warning(f"on_violation callback hatası: {exc}")
 
                 # 4. Görselleştirme
                 display_frame = self._visualize(
