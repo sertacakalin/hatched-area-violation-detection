@@ -27,6 +27,7 @@ from plotly.subplots import make_subplots
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.core.config import Config
 from src.core.data_models import VehicleState
 from src.core.heatmap import ViolationHeatmap
 from src.tracking.bytetrack_wrapper import ByteTrackWrapper
@@ -35,6 +36,18 @@ from src.zones.zone_manager import ZoneManager
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 logger = logging.getLogger(__name__)
+
+# Default config — pipeline ile aynı tek kaynak
+DEFAULT_CONFIG_PATH = PROJECT_ROOT / "configs" / "config.yaml"
+_DEFAULT_CONFIG: Config | None = None
+
+
+def _get_config() -> Config:
+    """Lazy + cached config loader. Test/prod arasında paylaşılır."""
+    global _DEFAULT_CONFIG
+    if _DEFAULT_CONFIG is None:
+        _DEFAULT_CONFIG = Config(DEFAULT_CONFIG_PATH)
+    return _DEFAULT_CONFIG
 
 # ── Constants ────────────────────────────────────────────────────────
 LEVEL_EN = {
@@ -134,8 +147,57 @@ footer { display: none !important; }
 
 
 def _model_path() -> str:
-    custom = PROJECT_ROOT / "weights" / "best.pt"
-    return str(custom) if custom.exists() else "yolov8s.pt"
+    """Config'teki model yolunu kullan; yoksa best_v3 → best → yolov8s sırasıyla fallback."""
+    cfg_path = _get_config().get("vehicle_detection.model_path")
+    if cfg_path and (PROJECT_ROOT / cfg_path).exists():
+        return str(PROJECT_ROOT / cfg_path)
+    for fallback in ("weights/best_v3.pt", "weights/best.pt"):
+        if (PROJECT_ROOT / fallback).exists():
+            return str(PROJECT_ROOT / fallback)
+    return "yolov8s.pt"
+
+
+def _model_classes() -> list[int]:
+    """Config'teki sınıf ID'leri (modelin gerçek class indekslerine eşleşir)."""
+    return list(_get_config().get("vehicle_detection.classes", [0, 1, 2, 3]))
+
+
+def _build_plate_recognizer_safe():
+    """Plaka modülünü güvenli şekilde kur (yoksa None)."""
+    cfg = _get_config()
+    if not cfg.get("plate.enabled", False):
+        return None
+    try:
+        from src.plate import PlateDetector, PlateOCR, PlateRecognizer
+    except ImportError as exc:
+        logger.warning("Plaka modülü yüklenemedi: %s — kapalı", exc)
+        return None
+    try:
+        detector = PlateDetector(
+            model_path=str(PROJECT_ROOT / cfg.get(
+                "plate.detector.model_path", "weights/plate.pt")),
+            confidence_threshold=cfg.get(
+                "plate.detector.confidence_threshold", 0.25),
+            iou_threshold=cfg.get("plate.detector.iou_threshold", 0.45),
+            img_size=cfg.get("plate.detector.img_size", 640),
+            half=cfg.get("plate.detector.half", False),
+        )
+        ocr = PlateOCR(
+            languages=cfg.get("plate.ocr.languages", ["en"]),
+            use_gpu=cfg.get("plate.ocr.use_gpu", False),
+            backend=cfg.get("plate.ocr.backend", "easyocr"),
+        )
+        return PlateRecognizer(
+            detector=detector, ocr=ocr,
+            buffer_size=cfg.get("plate.recognizer.buffer_size", 10),
+            min_plate_conf=cfg.get("plate.recognizer.min_plate_conf", 0.25),
+            topk_for_ocr=cfg.get("plate.recognizer.topk_for_ocr", 3),
+            valid_format_bonus=cfg.get(
+                "plate.recognizer.valid_format_bonus", 1.5),
+        )
+    except Exception as exc:
+        logger.warning("PlateRecognizer kurulamadı: %s — kapalı", exc)
+        return None
 
 
 def _first_frame_bgr(video_path: str) -> np.ndarray | None:
@@ -495,7 +557,7 @@ def on_clear(original_frame):
 
 
 def run_pipeline(video_path, polygon_pts, conf, iou, moving_cam,
-                 progress=gr.Progress()):
+                 use_plate, progress=gr.Progress()):
     if not video_path:
         raise gr.Error("Upload a video first.")
     if len(polygon_pts) < 3:
@@ -508,6 +570,8 @@ def run_pipeline(video_path, polygon_pts, conf, iou, moving_cam,
         has_gpu = torch.cuda.is_available()
     except ImportError:
         has_gpu = False
+
+    cfg = _get_config()
 
     # Temp zone file
     zone_dict = {
@@ -524,12 +588,32 @@ def run_pipeline(video_path, polygon_pts, conf, iou, moving_cam,
 
     # Pipeline components
     model_path = _model_path()
-    logger.info("Model: %s | GPU: %s", model_path, has_gpu)
+    model_classes = _model_classes()
+    logger.info("Model: %s | classes=%s | GPU: %s",
+                model_path, model_classes, has_gpu)
 
     tracker = ByteTrackWrapper(
-        model_path=model_path, conf=conf, iou=iou, half=has_gpu)
+        model_path=model_path, conf=conf, iou=iou,
+        classes=model_classes,
+        img_size=cfg.get("vehicle_detection.img_size", 640),
+        half=has_gpu and cfg.get("vehicle_detection.half_precision", False),
+        max_bbox_ratio=cfg.get("vehicle_detection.max_bbox_ratio", 0.25),
+    )
     zone_mgr = ZoneManager(zone_tmp.name, polygon_buffer=0)
-    detector = ViolationDetector(zone_manager=zone_mgr)
+    detector = ViolationDetector(
+        zone_manager=zone_mgr,
+        min_frames_in_zone=cfg.get("violation.min_frames_in_zone", 5),
+        cooldown_frames=cfg.get("violation.cooldown_frames", 600),
+        min_overlap_ratio=cfg.get("zone.min_overlap_ratio", 0.3),
+        per_track_lock=cfg.get("violation.per_track_lock", True),
+    )
+    # Aynı session içinde tekrar Run'lara state taşınmasın
+    detector.reset()
+
+    # Plaka tanıma (opsiyonel)
+    plate_recognizer = _build_plate_recognizer_safe() if use_plate else None
+    if use_plate and plate_recognizer is None:
+        logger.warning("Plaka istendi ama recognizer kurulamadı — kapalı")
 
     # Video
     cap = cv2.VideoCapture(video_path)
@@ -577,7 +661,17 @@ def run_pipeline(video_path, polygon_pts, conf, iou, moving_cam,
         zone_draw = zone_mgr.get_zone_polygons_for_drawing()
 
         objs = tracker.update(None, frame)
-        objs, new_viol = detector.process_frame(objs, frame, frame_idx, fps)
+        filtered_ids = getattr(tracker, "last_filtered_track_ids", set())
+
+        # Plaka ring buffer'ı her frame'de güncellenir; ihlal onaylandığında
+        # buffer üzerinden recognize() çağrılır (best-frame voting).
+        if plate_recognizer is not None:
+            plate_recognizer.update_buffer(objs, frame, frame_idx)
+
+        objs, new_viol = detector.process_frame(
+            objs, frame, frame_idx, fps,
+            extra_active_ids=filtered_ids,
+        )
 
         # Update trails
         for obj in objs:
@@ -588,6 +682,14 @@ def run_pipeline(video_path, polygon_pts, conf, iou, moving_cam,
 
         # Collect violations
         for v in new_viol:
+            # Plaka tanı (varsa) — ihlal onaylanır onaylanmaz, buffer hâlâ dolu
+            if plate_recognizer is not None:
+                try:
+                    v.plate = plate_recognizer.recognize(v.track_id)
+                except Exception as exc:
+                    logger.warning("Plaka tanıma hatası (track %s): %s",
+                                   v.track_id, exc)
+                    v.plate = None
             all_violations.append(v)
             severity_map[v.track_id] = v.severity_score
             cx = float((v.vehicle_bbox[0] + v.vehicle_bbox[2]) / 2)
@@ -596,9 +698,13 @@ def run_pipeline(video_path, polygon_pts, conf, iou, moving_cam,
             # Snapshot of violation moment (max 12)
             if len(violation_snapshots) < 12 and v.vehicle_crop is not None:
                 snap = cv2.cvtColor(v.vehicle_crop, cv2.COLOR_BGR2RGB)
+                plate_lbl = ""
+                if v.plate and v.plate.plate_text:
+                    valid = "✓" if v.plate.is_valid else "?"
+                    plate_lbl = f" | {v.plate.plate_text}{valid}"
                 violation_snapshots.append(
                     (snap, f"#{v.track_id} {v.vehicle_class} "
-                           f"[{v.severity_score:.0f}]"))
+                           f"[{v.severity_score:.0f}]{plate_lbl}"))
 
         elapsed = time.time() - t0
         annotated = _annotate(
@@ -622,21 +728,29 @@ def run_pipeline(video_path, polygon_pts, conf, iou, moving_cam,
 
     # ── Build outputs ────────────────────────────────────────────────
 
-    # Violation table
+    # Violation table — plaka kolonu sadece plate aktifse anlamlı
     rows = []
     for v in all_violations:
         m, s = int(v.timestamp // 60), v.timestamp % 60
+        plate_text = "—"
+        plate_city = "—"
+        if v.plate and v.plate.plate_text:
+            mark = "✓" if v.plate.is_valid else "?"
+            plate_text = f"{v.plate.plate_text} {mark}"
+            plate_city = v.plate.city_name or "—"
         rows.append({
             "Time": f"{m:02d}:{s:05.2f}",
             "Track ID": v.track_id,
             "Vehicle": v.vehicle_class,
+            "Plate": plate_text,
+            "City": plate_city,
             "Score": v.severity_score,
             "Level": _tr_level(v.severity_level),
             "Type": _tr_type(v.violation_type),
             "Frames": v.frames_in_zone,
         })
     df = pd.DataFrame(rows) if rows else pd.DataFrame(
-        columns=["Time", "Track ID", "Vehicle",
+        columns=["Time", "Track ID", "Vehicle", "Plate", "City",
                  "Score", "Level", "Type", "Frames"])
 
     # Charts
@@ -706,6 +820,12 @@ def build_app():
                     info="Tracks the zone polygon across frames "
                          "using feature matching")
 
+                plate_cb = gr.Checkbox(
+                    label="Enable Plate Recognition",
+                    value=bool(_get_config().get("plate.enabled", True)),
+                    info="Detect + read TR license plates on confirmed "
+                         "violations (uses weights/plate.pt + EasyOCR)")
+
                 gr.Markdown(
                     "### 3. Define Zone\n"
                     "**Click** on the frame to add vertices, "
@@ -768,7 +888,8 @@ def build_app():
             [preview_img, pts_state, coords_tb])
         run_btn.click(
             run_pipeline,
-            [video_in, pts_state, conf_sl, iou_sl, moving_cam_cb],
+            [video_in, pts_state, conf_sl, iou_sl,
+             moving_cam_cb, plate_cb],
             [video_out, table_out, chart_out, heatmap_out,
              summary_out, gallery_out])
 

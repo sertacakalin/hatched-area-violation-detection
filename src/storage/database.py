@@ -1,9 +1,8 @@
 """SQLite veritabanı — ihlal kayıtları için şema ve CRUD işlemleri."""
 
-import sqlite3
 import logging
+import sqlite3
 from pathlib import Path
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -94,8 +93,20 @@ class ViolationDatabase:
 
     def _get_connection(self) -> sqlite3.Connection:
         if self._conn is None:
-            self._conn = sqlite3.connect(str(self.db_path))
+            # check_same_thread=False: Gradio handler thread-pool'unda
+            # çalıştığında Pipeline'ın DB'ye yazması için gerekli. Tek
+            # connection olduğu için yine de paralel write yapılmamalı;
+            # _write_lock buna karşı koruma.
+            self._conn = sqlite3.connect(
+                str(self.db_path), check_same_thread=False
+            )
             self._conn.row_factory = sqlite3.Row
+            # WAL mode: okuyucular yazıcıyı bloklamasın (DB browser, dashboard)
+            try:
+                self._conn.execute("PRAGMA journal_mode=WAL")
+                self._conn.execute("PRAGMA synchronous=NORMAL")
+            except sqlite3.DatabaseError as exc:
+                logger.warning("PRAGMA WAL ayarlanamadı: %s", exc)
         return self._conn
 
     def insert_violation(self, data: dict) -> int:
