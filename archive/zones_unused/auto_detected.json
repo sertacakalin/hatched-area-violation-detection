@@ -1,0 +1,64 @@
+{
+  "camera_id": "auto_detected",
+  "description": "Otomatik tespit — Klasik CV (Hough+DBSCAN)",
+  "detection_method": "hough_lines_dbscan_v2",
+  "frame_width": 1080,
+  "frame_height": 1920,
+  "zones": [
+    {
+      "zone_id": "zone_auto_01",
+      "name": "Taralı Alan (Otomatik)",
+      "polygon": [
+        [
+          1094,
+          1365
+        ],
+        [
+          1094,
+          533
+        ],
+        [
+          1047,
+          506
+        ],
+        [
+          937,
+          471
+        ],
+        [
+          190,
+          358
+        ],
+        [
+          115,
+          394
+        ],
+        [
+          -15,
+          550
+        ],
+        [
+          -15,
+          1906
+        ],
+        [
+          -3,
+          1920
+        ],
+        [
+          449,
+          1934
+        ],
+        [
+          745,
+          1934
+        ],
+        [
+          894,
+          1704
+        ]
+      ],
+      "type": "hatched_area"
+    }
+  ]
+}

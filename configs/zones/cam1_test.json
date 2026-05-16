@@ -1,0 +1,34 @@
+{
+  "camera_id": "cam1_test",
+  "frame_width": 1920,
+  "frame_height": 1080,
+  "zones": [
+    {
+      "zone_id": "hatched_area",
+      "name": "Taralı Alan",
+      "polygon": [
+        [
+          1179,
+          716
+        ],
+        [
+          743,
+          986
+        ],
+        [
+          765,
+          997
+        ],
+        [
+          1060,
+          863
+        ],
+        [
+          1268,
+          764
+        ]
+      ],
+      "type": "hatched_area"
+    }
+  ]
+}

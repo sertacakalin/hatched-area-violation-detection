@@ -1,0 +1,19 @@
+{
+  "camera_id": "camera_01",
+  "description": "Örnek taralı alan - İstanbul kavşak",
+  "frame_width": 1920,
+  "frame_height": 1080,
+  "zones": [
+    {
+      "zone_id": "zone_01",
+      "name": "Taralı Alan 1",
+      "polygon": [
+        [500, 400],
+        [800, 400],
+        [850, 600],
+        [450, 600]
+      ],
+      "type": "hatched_area"
+    }
+  ]
+}
