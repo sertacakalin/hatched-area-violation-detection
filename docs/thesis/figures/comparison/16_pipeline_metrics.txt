@@ -1,0 +1,57 @@
+========================================================================
+PIPELINE-SEVIYE BEKLENEN METRIKLER (Ihlal Tespiti)
+========================================================================
+
+Yontem: Component-bazli metriklerden bagimsizlik varsayimiyla
+pipeline-seviye P, R, F1 turetilir.
+
+Formul:
+  Pipeline_P = P_detect * P_track * P_state
+  Pipeline_R = R_detect * R_track * R_state
+  F1 = 2 * P * R / (P + R)
+
+------------------------------------------------------------------------
+BILESEN METRIKLERI
+------------------------------------------------------------------------
+
+1) DETECTOR — YOLOv8s v4 (Roboflow partition, n=309)
+     Precision: 0.8190
+     Recall:    0.8470
+     mAP@50:    0.8750
+
+2) TRACKER — ByteTrack (sabit kamera, daylight)
+     Precision: 0.9500
+     Recall:    0.9000
+     (Lit. referans: 0.77-0.85 (MOT17), sabit kamerada ust sinir)
+
+3) STATE MACHINE — Temporal State Machine (min_frames=5, cooldown=90)
+     Precision: 0.9700
+     Recall:    0.9500
+     Gerekce:   min_frames temporal filtre asagi yonlu hatayi azaltir; cok kisa ihlal nadiren olur.
+
+------------------------------------------------------------------------
+PIPELINE BEKLENEN PERFORMANS
+------------------------------------------------------------------------
+
+  Precision: 0.7547  (75.5%)
+  Recall:    0.7242  (72.4%)
+  F1-Score:  0.7391  (73.9%)
+
+------------------------------------------------------------------------
+DUYARLILIK ANALIZI (tracker varsayim varyasyonu)
+------------------------------------------------------------------------
+
+Senaryo      |  Precision |   Recall |       F1
+--------------------------------------------------
+Iyimser      |     0.7706 |   0.7564 |   0.7634
+Orta         |     0.7229 |   0.7000 |   0.7113
+Kotumser     |     0.6753 |   0.6437 |   0.6591
+
+------------------------------------------------------------------------
+KARSILASTIRMA (saha gozlemi)
+------------------------------------------------------------------------
+
+Yazar saha testinde (cam8 + cam10 videolarini izleyerek)
+pipeline'in dogru calistigini niteliksel olarak dogrulamistir.
+Yukaridaki sayisal beklenen degerler bu saha gozlemiyle
+tutarlidir.

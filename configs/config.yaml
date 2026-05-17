@@ -16,7 +16,7 @@ general:
 # Sınıflar:   {0:bus, 1:car, 2:motorcycle, 3:truck}
 # Metrikler:  mAP50=0.808, mAP50-95=0.653, P=0.765, R=0.787
 vehicle_detection:
-  model_path: "weights/best_v3.pt"
+  model_path: "weights/best_v4.pt"
   confidence_threshold: 0.55  # 0.35 → 0.55 (file2_dense noise filtrele)
   iou_threshold: 0.45
   classes: [0, 1, 2, 3]   # bus, car, motorcycle, truck (best_v3.pt sınıf sırası)
@@ -37,9 +37,13 @@ zone:
 
 # --- İhlal Tespiti ---
 violation:
-  min_frames_in_zone: 5    # Minimum kare sayısı (temporal filtre)
-  cooldown_frames: 600     # Aynı araç için tekrar ihlal süresi (20 sn @ 30fps)
-  per_track_lock: true     # Aynı track_id daha önce ihlal yaptıysa bir daha sayma
+  min_frames_in_zone: 15   # Minimum kare sayısı (5 → 15: kisa girdi-cikti filtre, 250 ms @ 60fps)
+  cooldown_frames: 600     # Ayni araç icin tekrar ihlal suresi
+  per_track_lock: true     # Ayni track_id daha once ihlal yaptiysa bir daha sayma
+  # Yeni: ayni bolgede son N frame icinde ihlal varsa yeni track'i de sayma (track_id kaybi cozumu)
+  spatial_dedup_enabled: true
+  spatial_dedup_radius: 100   # piksel; ihlal noktasi etrafinda
+  spatial_dedup_window_frames: 600  # son 10 sn @ 60fps
   states:
     - OUTSIDE
     - ENTERING

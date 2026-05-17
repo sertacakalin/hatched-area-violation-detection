@@ -1,0 +1,4 @@
+subset,n_images,mAP50,mAP50_95,precision,recall,bus,car,motorcycle,truck
+Roboflow (cam1-5, community manuel),309,0.8749,0.6846,0.8186,0.8470,0.8736,0.9683,0.7406,0.9172
+Pseudo-label (file1/3/4, eski model),354,0.9178,0.7648,0.8926,0.8615,0.9399,0.9502,0.8870,0.8943
+Manuel cam10/cam11 (sen, Label Studio),32,0.8219,0.6724,0.7894,0.7936,0.9200,0.9671,0.5010,0.8996

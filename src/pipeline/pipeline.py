@@ -99,6 +99,9 @@ class Pipeline:
             cooldown_frames=config.get("violation.cooldown_frames", 90),
             min_overlap_ratio=config.get("zone.min_overlap_ratio", 0.3),
             per_track_lock=config.get("violation.per_track_lock", True),
+            spatial_dedup_enabled=config.get("violation.spatial_dedup_enabled", False),
+            spatial_dedup_radius=config.get("violation.spatial_dedup_radius", 100.0),
+            spatial_dedup_window_frames=config.get("violation.spatial_dedup_window_frames", 600),
         )
 
         # Kayıt (SQLite + JSON)

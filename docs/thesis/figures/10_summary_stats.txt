@@ -1,0 +1,28 @@
+============================================================
+v4 DATASET — TEZ İÇİN SAYISAL ÖZET
+============================================================
+
+Toplam image:          1050
+Toplam annotated obje: 35009
+Image başına ortalama: 33.34 obje
+
+KAYNAK BAZLI:
+  Roboflow      :  1050 image, 35009 obj  [manuel]
+  cam10         :     0 image,     0 obj  [manuel]
+  cam11         :     0 image,     0 obj  [manuel]
+  file1_night   :     0 image,     0 obj  [pseudo]
+  file3_day     :     0 image,     0 obj  [pseudo]
+  file4_evening :     0 image,     0 obj  [pseudo]
+
+SINIF BAZLI:
+  bus         :    255 obj  ( 0.73%)
+  car         :  25607 obj  (73.14%)
+  motorcycle  :    145 obj  ( 0.41%)
+  truck       :   9002 obj  (25.71%)
+
+IMAGE BAŞINA OBJE:
+  min: 12
+  max: 58
+  ortalama: 33.34
+  medyan:   33
+  std:      10.02

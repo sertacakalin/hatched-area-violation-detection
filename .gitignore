@@ -58,3 +58,11 @@ Thumbs.db
 *.sqlite3
 .claude/
 **/.claude/
+
+# Backup files (from sed -i etc.)
+*.bak
+
+# YOLO run outputs — weights are large, keep only PNGs/CSVs
+runs/**/weights/
+runs/**/*.engine
+runs/**/*.onnx

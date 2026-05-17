@@ -29,7 +29,6 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.core.config import Config
 from src.core.data_models import VehicleState
-from src.core.heatmap import ViolationHeatmap
 from src.tracking.bytetrack_wrapper import ByteTrackWrapper
 from src.violation.violation_detector import ViolationDetector
 from src.zones.zone_manager import ZoneManager
@@ -67,67 +66,9 @@ TYPE_COLORS = {
     "EDGE_CONTACT": "#FFC107", "OTHER": "#607D8B",
 }
 TRAIL_LEN = 30  # trajectory trail length (frames)
-ZONE_TRACK_SCALE = 0.4  # downscale for feature matching speed
 
 
 # ── Dynamic Zone Tracker (moving camera) ─────────────────────────────
-
-
-class DynamicZoneTracker:
-    """Track the zone polygon across frames using ORB feature matching.
-
-    When the camera moves (drone, PTZ), the hatched area shifts in pixel
-    space.  This class computes a homography from the reference frame
-    (where the user drew the polygon) to each new frame, and warps the
-    polygon accordingly.
-    """
-
-    def __init__(self, ref_bgr: np.ndarray, polygon_pts: list,
-                 scale: float = ZONE_TRACK_SCALE,
-                 n_features: int = 2000):
-        self.scale = scale
-        self.original_pts = np.float32(polygon_pts)
-        ref_small = cv2.resize(ref_bgr, None, fx=scale, fy=scale)
-        self.ref_gray = cv2.cvtColor(ref_small, cv2.COLOR_BGR2GRAY)
-        self.orb = cv2.ORB_create(nfeatures=n_features)
-        self.bf = cv2.BFMatcher(cv2.NORM_HAMMING)
-        self.ref_kp, self.ref_desc = self.orb.detectAndCompute(
-            self.ref_gray, None)
-        self._last_pts = self.original_pts.copy()
-
-    def update(self, frame_bgr: np.ndarray) -> list[list[int]]:
-        """Return the transformed polygon for *frame_bgr*."""
-        small = cv2.resize(frame_bgr, None,
-                           fx=self.scale, fy=self.scale)
-        gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
-
-        kp, desc = self.orb.detectAndCompute(gray, None)
-        if desc is None or self.ref_desc is None or len(kp) < 10:
-            return self._last_pts.astype(int).tolist()
-
-        matches = self.bf.knnMatch(self.ref_desc, desc, k=2)
-        # Lowe's ratio test
-        good = [m for pair in matches if len(pair) == 2
-                for m in [pair[0]] if m.distance < 0.75 * pair[1].distance]
-        if len(good) < 10:
-            return self._last_pts.astype(int).tolist()
-
-        src = np.float32(
-            [self.ref_kp[m.queryIdx].pt for m in good]
-        ).reshape(-1, 1, 2)
-        dst = np.float32(
-            [kp[m.trainIdx].pt for m in good]
-        ).reshape(-1, 1, 2)
-
-        H, _ = cv2.findHomography(src, dst, cv2.RANSAC, 5.0)
-        if H is None:
-            return self._last_pts.astype(int).tolist()
-
-        # Scale polygon → match space → transform → scale back
-        pts_s = (self.original_pts * self.scale).reshape(-1, 1, 2)
-        warped = cv2.perspectiveTransform(pts_s.astype(np.float32), H)
-        self._last_pts = warped.reshape(-1, 2) / self.scale
-        return self._last_pts.astype(int).tolist()
 
 
 CSS = """
@@ -556,7 +497,7 @@ def on_clear(original_frame):
 # ── Main pipeline ────────────────────────────────────────────────────
 
 
-def run_pipeline(video_path, polygon_pts, conf, iou, moving_cam,
+def run_pipeline(video_path, polygon_pts, conf, iou,
                  use_plate, progress=gr.Progress()):
     if not video_path:
         raise gr.Error("Upload a video first.")
@@ -606,6 +547,9 @@ def run_pipeline(video_path, polygon_pts, conf, iou, moving_cam,
         cooldown_frames=cfg.get("violation.cooldown_frames", 600),
         min_overlap_ratio=cfg.get("zone.min_overlap_ratio", 0.3),
         per_track_lock=cfg.get("violation.per_track_lock", True),
+        spatial_dedup_enabled=cfg.get("violation.spatial_dedup_enabled", False),
+        spatial_dedup_radius=cfg.get("violation.spatial_dedup_radius", 100.0),
+        spatial_dedup_window_frames=cfg.get("violation.spatial_dedup_window_frames", 600),
     )
     # Aynı session içinde tekrar Run'lara state taşınmasın
     detector.reset()
@@ -622,8 +566,6 @@ def run_pipeline(video_path, polygon_pts, conf, iou, moving_cam,
     w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    heatmap = ViolationHeatmap(width=w, height=h)
-
     out_path = tempfile.mktemp(suffix=".mp4")
     writer = cv2.VideoWriter(
         out_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
@@ -632,7 +574,6 @@ def run_pipeline(video_path, polygon_pts, conf, iou, moving_cam,
     severity_map: dict[int, float] = {}
     trails: dict[int, list] = defaultdict(list)
     first_bgr = None
-    zone_tracker = None  # initialized on first frame if moving_cam
     frame_idx = 0
     t0 = time.time()
     step = max(1, total // 50) if total > 0 else 30
@@ -646,17 +587,6 @@ def run_pipeline(video_path, polygon_pts, conf, iou, moving_cam,
             break
         if first_bgr is None:
             first_bgr = frame.copy()
-            if moving_cam:
-                zone_tracker = DynamicZoneTracker(
-                    first_bgr, polygon_pts)
-                logger.info("Dynamic zone tracking enabled")
-
-        # Update zone polygon if camera is moving
-        if zone_tracker is not None:
-            from shapely.geometry import Polygon as ShapelyPolygon
-            new_pts = zone_tracker.update(frame)
-            if len(new_pts) >= 3:
-                zone_mgr.zones[0].polygon = ShapelyPolygon(new_pts)
 
         zone_draw = zone_mgr.get_zone_polygons_for_drawing()
 
@@ -692,9 +622,6 @@ def run_pipeline(video_path, polygon_pts, conf, iou, moving_cam,
                     v.plate = None
             all_violations.append(v)
             severity_map[v.track_id] = v.severity_score
-            cx = float((v.vehicle_bbox[0] + v.vehicle_bbox[2]) / 2)
-            cy = float((v.vehicle_bbox[1] + v.vehicle_bbox[3]) / 2)
-            heatmap.add_violation((cx, cy), v.severity_score)
             # Snapshot of violation moment (max 12)
             if len(violation_snapshots) < 12 and v.vehicle_crop is not None:
                 snap = cv2.cvtColor(v.vehicle_crop, cv2.COLOR_BGR2RGB)
@@ -756,12 +683,6 @@ def run_pipeline(video_path, polygon_pts, conf, iou, moving_cam,
     # Charts
     fig = _build_charts(df)
 
-    # Heatmap
-    hmap_rgb = None
-    if first_bgr is not None:
-        hmap_rgb = cv2.cvtColor(
-            heatmap.render(first_bgr), cv2.COLOR_BGR2RGB)
-
     # Summary
     stats = detector.get_severity_statistics()
     summary_md = _build_summary_md(stats, proc_fps, frame_idx, fps)
@@ -770,7 +691,7 @@ def run_pipeline(video_path, polygon_pts, conf, iou, moving_cam,
     gallery = [(img, cap) for img, cap in violation_snapshots] or None
 
     progress(1.0, desc="Done!")
-    return out_video, df, fig, hmap_rgb, summary_md, gallery
+    return out_video, df, fig, summary_md, gallery
 
 
 # ── Gradio app layout ───────────────────────────────────────────────
@@ -813,12 +734,6 @@ def build_app():
                     0.1, 0.9, value=0.45, step=0.05,
                     label="IoU Threshold",
                     info="Higher = less overlap merging")
-
-                moving_cam_cb = gr.Checkbox(
-                    label="Moving Camera (drone / PTZ)",
-                    value=False,
-                    info="Tracks the zone polygon across frames "
-                         "using feature matching")
 
                 plate_cb = gr.Checkbox(
                     label="Enable Plate Recognition",
@@ -867,9 +782,6 @@ def build_app():
                     label="Violating Vehicles",
                     columns=4, object_fit="contain", height=250)
 
-            with gr.Tab("Heatmap"):
-                heatmap_out = gr.Image(label="Violation Heatmap")
-
         # ── Wiring ───────────────────────────────────────────────────
         video_in.change(
             on_upload, [video_in],
@@ -888,9 +800,8 @@ def build_app():
             [preview_img, pts_state, coords_tb])
         run_btn.click(
             run_pipeline,
-            [video_in, pts_state, conf_sl, iou_sl,
-             moving_cam_cb, plate_cb],
-            [video_out, table_out, chart_out, heatmap_out,
+            [video_in, pts_state, conf_sl, iou_sl, plate_cb],
+            [video_out, table_out, chart_out,
              summary_out, gallery_out])
 
     return app

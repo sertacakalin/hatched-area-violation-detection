@@ -1,0 +1,69 @@
+{
+  "video": "field_test_30s.mp4",
+  "fps": 30,
+  "annotator": "Sertac Akalin",
+  "description": "30 saniye saha testi, mobese kamerasi",
+  "method": "Manuel sayim (frame numarasi olmadan, sadece olay sayisi)",
+  "summary": {
+    "duration_seconds": 30,
+    "real_violations_observed": 10,
+    "pipeline_true_positives": 8,
+    "pipeline_false_positives": 1,
+    "pipeline_false_negatives": 2,
+    "precision": 0.8889,
+    "recall": 0.8,
+    "f1_score": 0.8421
+  },
+  "violations": [
+    {
+      "id": "v001",
+      "type": "OBSERVED",
+      "notes": "Frame numbers not recorded"
+    },
+    {
+      "id": "v002",
+      "type": "OBSERVED",
+      "notes": "Frame numbers not recorded"
+    },
+    {
+      "id": "v003",
+      "type": "OBSERVED",
+      "notes": "Frame numbers not recorded"
+    },
+    {
+      "id": "v004",
+      "type": "OBSERVED",
+      "notes": "Frame numbers not recorded"
+    },
+    {
+      "id": "v005",
+      "type": "OBSERVED",
+      "notes": "Frame numbers not recorded"
+    },
+    {
+      "id": "v006",
+      "type": "OBSERVED",
+      "notes": "Frame numbers not recorded"
+    },
+    {
+      "id": "v007",
+      "type": "OBSERVED",
+      "notes": "Frame numbers not recorded"
+    },
+    {
+      "id": "v008",
+      "type": "OBSERVED",
+      "notes": "Frame numbers not recorded"
+    },
+    {
+      "id": "v009",
+      "type": "OBSERVED",
+      "notes": "Frame numbers not recorded"
+    },
+    {
+      "id": "v010",
+      "type": "OBSERVED",
+      "notes": "Frame numbers not recorded"
+    }
+  ]
+}

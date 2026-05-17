@@ -1,0 +1,42 @@
+{
+  "detector": {
+    "name": "YOLOv8s v4 (Roboflow partition, n=309)",
+    "P": 0.819,
+    "R": 0.847,
+    "mAP50": 0.875
+  },
+  "tracker": {
+    "name": "ByteTrack (sabit kamera, daylight)",
+    "P": 0.95,
+    "R": 0.9,
+    "IDF1_literature": "0.77-0.85 (MOT17), sabit kamerada ust sinir"
+  },
+  "state_machine": {
+    "name": "Temporal State Machine (min_frames=5, cooldown=90)",
+    "P": 0.97,
+    "R": 0.95,
+    "rationale": "min_frames temporal filtre asagi yonlu hatayi azaltir; cok kisa ihlal nadiren olur."
+  },
+  "pipeline_expected": {
+    "P": 0.7547084999999999,
+    "R": 0.724185,
+    "F1": 0.7391317563739376
+  },
+  "sensitivity": {
+    "Iyimser": {
+      "P": 0.7705970999999999,
+      "R": 0.7563709999999999,
+      "F1": 0.7634177807959445
+    },
+    "Orta": {
+      "P": 0.7229312999999998,
+      "R": 0.7000454999999999,
+      "F1": 0.7113043633236322
+    },
+    "Kotumser": {
+      "P": 0.6752655,
+      "R": 0.64372,
+      "F1": 0.6591155212244562
+    }
+  }
+}

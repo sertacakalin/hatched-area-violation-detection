@@ -36,6 +36,9 @@ class ViolationDetector:
         use_bottom_center: bool = True,
         severity_weights: dict | None = None,
         per_track_lock: bool = True,
+        spatial_dedup_enabled: bool = False,
+        spatial_dedup_radius: float = 100.0,
+        spatial_dedup_window_frames: int = 600,
     ):
         self.zone_manager = zone_manager
         self.min_overlap_ratio = min_overlap_ratio
@@ -54,6 +57,11 @@ class ViolationDetector:
         self._severity_levels: dict[str, int] = {}
         # per_track_lock: aynı track_id ihlal yaptıysa video boyunca bir daha sayma
         self._violated_tracks: set[int] = set()
+        # Spatial dedup: track_id kaybinda aynı bölgede tekrar ihlal sayma
+        self.spatial_dedup_enabled = spatial_dedup_enabled
+        self.spatial_dedup_radius_sq = float(spatial_dedup_radius) ** 2
+        self.spatial_dedup_window_frames = int(spatial_dedup_window_frames)
+        self._recent_violation_points: list[tuple[float, float, int]] = []  # (x, y, frame_num)
 
     def process_frame(
         self,
@@ -119,6 +127,32 @@ class ViolationDetector:
                     obj.state = VehicleState.INSIDE
                     obj.is_violation = False
                     continue
+                # Spatial dedup: yakin gecmiste ayni bolgede ihlal varsa atla
+                # (Tracker track_id kaybetmis olabilir; aynı motorun bir kac kez
+                # sayilmasini onler)
+                if self.spatial_dedup_enabled:
+                    cx, cy = obj.bottom_center
+                    suppress = False
+                    # Pencere disindaki noktalari at
+                    self._recent_violation_points = [
+                        (px, py, pf) for (px, py, pf) in self._recent_violation_points
+                        if frame_number - pf <= self.spatial_dedup_window_frames
+                    ]
+                    for (px, py, _pf) in self._recent_violation_points:
+                        dist_sq = (cx - px) ** 2 + (cy - py) ** 2
+                        if dist_sq <= self.spatial_dedup_radius_sq:
+                            suppress = True
+                            break
+                    if suppress:
+                        obj.state = VehicleState.INSIDE
+                        obj.is_violation = False
+                        logger.debug(
+                            "Spatial-dedup: track %s ihlali yakin gecmiste"
+                            " ayni bolgede zaten sayildigi icin atlandi",
+                            obj.track_id,
+                        )
+                        continue
+                    self._recent_violation_points.append((cx, cy, frame_number))
                 self._violated_tracks.add(obj.track_id)
                 self._violation_count += 1
                 event = self._create_violation_event(
@@ -228,3 +262,4 @@ class ViolationDetector:
         self._violation_types.clear()
         self._severity_levels.clear()
         self._violated_tracks.clear()
+        self._recent_violation_points.clear()

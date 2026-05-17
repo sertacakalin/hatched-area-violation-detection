@@ -64,7 +64,7 @@ case "$MODE" in
     "$PY" -c "
 from ultralytics import YOLO
 import collections
-m = YOLO('weights/best_v3.pt')
+m = YOLO('weights/best_v4.pt')
 print('Classes:', m.names)
 results = m.predict(
     source='$CLIP_PATH', conf=0.35, save=True,
@@ -98,7 +98,7 @@ print(f'Detections: {dict(counts)}')
     "$PY" scripts/run_pipeline.py \
       --video "$CLIP_PATH" \
       --zone "$ZONE_PATH" \
-      --weights weights/best_v3.pt \
+      --weights weights/best_v4.pt \
       --classes 0,1,2,3 \
       --output "results/${RESULT_NAME}_pipeline"
     open "results/${RESULT_NAME}_pipeline/output.mp4" 2>/dev/null || true

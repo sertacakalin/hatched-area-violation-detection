@@ -1,0 +1,40 @@
+========================================================================
+v4 — TEST SETININ ALT-KUMELERINDE PERFORMANS
+========================================================================
+
+
+[ Roboflow (cam1-5, community manuel) ]
+  Image: 309
+  mAP@50     : 0.8749
+  mAP@50-95  : 0.6846
+  Precision  : 0.8186
+  Recall     : 0.8470
+  Per-class mAP@50:
+    bus         : 0.8736
+    car         : 0.9683
+    motorcycle  : 0.7406
+    truck       : 0.9172
+
+[ Pseudo-label (file1/3/4, eski model) ]
+  Image: 354
+  mAP@50     : 0.9178
+  mAP@50-95  : 0.7648
+  Precision  : 0.8926
+  Recall     : 0.8615
+  Per-class mAP@50:
+    bus         : 0.9399
+    car         : 0.9502
+    motorcycle  : 0.8870
+    truck       : 0.8943
+
+[ Manuel cam10/cam11 (sen, Label Studio) ]
+  Image: 32
+  mAP@50     : 0.8219
+  mAP@50-95  : 0.6724
+  Precision  : 0.7894
+  Recall     : 0.7936
+  Per-class mAP@50:
+    bus         : 0.9200
+    car         : 0.9671
+    motorcycle  : 0.5010
+    truck       : 0.8996

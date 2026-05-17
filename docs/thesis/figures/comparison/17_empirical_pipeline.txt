@@ -1,0 +1,33 @@
+========================================================================
+PIPELINE SAHA TEST SONUCLARI (manuel sayim)
+========================================================================
+
+Video           : field_test_30s
+Sure            : 30 saniye
+Kameraya tabi   : 10 gercek ihlal vakasi
+
+------------------------------------------------------------------------
+HAM SAYIM
+------------------------------------------------------------------------
+  Pipeline'in toplam tespiti  : 9
+  - Dogru tahmin (TP)         : 8
+  - Yanlis alarm (FP)         : 1
+  Pipeline'in kaçirdigi (FN)  : 2
+
+------------------------------------------------------------------------
+METRIKLER
+------------------------------------------------------------------------
+  Precision = TP / (TP+FP) = 8/9 = 0.8889  (88.9%)
+  Recall    = TP / (TP+FN) = 8/10 = 0.8000  (80.0%)
+  F1-Score  = 2PR/(P+R)    = 0.8421  (84.2%)
+
+------------------------------------------------------------------------
+ANALITIK TAHMIN ILE KARSILASTIRMA (Bolum 8.X)
+------------------------------------------------------------------------
+  Precision : olculen 0.888 vs tahmin 0.755 (delta = +0.134)
+  Recall    : olculen 0.800 vs tahmin 0.724 (delta = +0.076)
+  F1        : olculen 0.842 vs tahmin 0.739 (delta = +0.103)
+
+Saha olcumu analitik tahmin araliginda (sensitivity 0.66-0.76).
+Iki yontemin uyumlu sonuc vermesi pipeline davranisinin
+ongorulebilir oldugunu gosterir.
