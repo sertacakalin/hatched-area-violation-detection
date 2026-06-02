@@ -215,20 +215,28 @@ def _draw_hud(img, frame_idx, fps, elapsed, n_tracked, n_violations):
 
 
 def _draw_trails(img, trails, severity_map):
-    """Draw trajectory trails for tracked vehicles."""
+    """Draw trajectory trails — only for confirmed violators.
+
+    Trails for every tracked vehicle clutter dense-traffic scenes, and
+    ByteTrack ID switches produce long erratic lines across the frame.
+    We therefore draw a trail only for confirmed violators (showing the
+    offending vehicle's path into the zone) and skip implausibly long
+    segments caused by identity swaps.
+    """
+    MAX_SEG = 120  # px; drop segments longer than this (ID-switch jumps)
     for tid, positions in trails.items():
+        if tid not in severity_map:  # violators only → clean demo
+            continue
         if len(positions) < 2:
             continue
-        is_violator = tid in severity_map
         for i in range(1, len(positions)):
-            alpha = i / len(positions)  # fade in
-            thickness = max(1, int(alpha * 3))
-            if is_violator:
-                color = (0, 0, int(100 + 155 * alpha))  # red trail
-            else:
-                color = (0, int(100 + 155 * alpha), 0)  # green trail
             pt1 = (int(positions[i - 1][0]), int(positions[i - 1][1]))
             pt2 = (int(positions[i][0]), int(positions[i][1]))
+            if abs(pt1[0] - pt2[0]) + abs(pt1[1] - pt2[1]) > MAX_SEG:
+                continue  # skip erratic jump from a track-id switch
+            alpha = i / len(positions)  # fade in
+            thickness = max(2, int(alpha * 4))
+            color = (0, 0, int(120 + 135 * alpha))  # red trail, fading
             cv2.line(img, pt1, pt2, color, thickness, cv2.LINE_AA)
     return img
 

@@ -5,7 +5,7 @@
 # --- Genel ---
 general:
   device: "auto"          # "auto", "cuda:0", "cpu"
-  video_source: "data/videos/test/test_01.mp4"
+  video_source: "data/videos/test/cam1_test.mp4"
   output_dir: "results"
   save_video: true
   show_display: false     # Colab'da false, yerelde true
