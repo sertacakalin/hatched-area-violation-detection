@@ -127,6 +127,8 @@ def _build_plate_recognizer_safe():
             languages=cfg.get("plate.ocr.languages", ["en"]),
             use_gpu=cfg.get("plate.ocr.use_gpu", False),
             backend=cfg.get("plate.ocr.backend", "easyocr"),
+            allowlist=cfg.get(
+                "plate.ocr.allowlist", "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"),
         )
         return PlateRecognizer(
             detector=detector, ocr=ocr,
@@ -135,6 +137,18 @@ def _build_plate_recognizer_safe():
             topk_for_ocr=cfg.get("plate.recognizer.topk_for_ocr", 3),
             valid_format_bonus=cfg.get(
                 "plate.recognizer.valid_format_bonus", 1.5),
+            vehicle_padding_ratio=cfg.get(
+                "plate.recognizer.vehicle_padding_ratio", 0.03),
+            plate_padding_ratio_x=cfg.get(
+                "plate.recognizer.plate_padding_ratio_x", 0.12),
+            plate_padding_ratio_y=cfg.get(
+                "plate.recognizer.plate_padding_ratio_y", 0.25),
+            min_plate_width=cfg.get("plate.recognizer.min_plate_width", 32),
+            min_plate_height=cfg.get("plate.recognizer.min_plate_height", 8),
+            min_ocr_confidence=cfg.get(
+                "plate.recognizer.min_ocr_confidence", 0.15),
+            return_invalid_results=cfg.get(
+                "plate.recognizer.return_invalid_results", False),
         )
     except Exception as exc:
         logger.warning("PlateRecognizer kurulamadı: %s — kapalı", exc)
@@ -566,6 +580,9 @@ def run_pipeline(video_path, polygon_pts, conf, iou,
     plate_recognizer = _build_plate_recognizer_safe() if use_plate else None
     if use_plate and plate_recognizer is None:
         logger.warning("Plaka istendi ama recognizer kurulamadı — kapalı")
+    plate_delay_frames = int(
+        cfg.get("plate.recognizer.recognition_delay_frames", 30)
+    )
 
     # Video
     cap = cv2.VideoCapture(video_path)
@@ -586,6 +603,7 @@ def run_pipeline(video_path, polygon_pts, conf, iou,
     t0 = time.time()
     step = max(1, total // 50) if total > 0 else 30
     violation_snapshots = []
+    pending_plate_events = {}
 
     progress(0, desc="Processing video frames...")
 
@@ -602,9 +620,14 @@ def run_pipeline(video_path, polygon_pts, conf, iou,
         filtered_ids = getattr(tracker, "last_filtered_track_ids", set())
 
         # Plaka ring buffer'ı her frame'de güncellenir; ihlal onaylandığında
-        # buffer üzerinden recognize() çağrılır (best-frame voting).
+        # kısa bir gecikmeyle buffer üzerinden recognize() çağrılır.
         if plate_recognizer is not None:
-            plate_recognizer.update_buffer(objs, frame, frame_idx)
+            plate_recognizer.update_buffer(
+                objs,
+                frame,
+                frame_idx,
+                keep_track_ids=set(pending_plate_events),
+            )
 
         objs, new_viol = detector.process_frame(
             objs, frame, frame_idx, fps,
@@ -620,26 +643,34 @@ def run_pipeline(video_path, polygon_pts, conf, iou,
 
         # Collect violations
         for v in new_viol:
-            # Plaka tanı (varsa) — ihlal onaylanır onaylanmaz, buffer hâlâ dolu
             if plate_recognizer is not None:
-                try:
-                    v.plate = plate_recognizer.recognize(v.track_id)
-                except Exception as exc:
-                    logger.warning("Plaka tanıma hatası (track %s): %s",
-                                   v.track_id, exc)
-                    v.plate = None
+                pending_plate_events[v.track_id] = (
+                    v,
+                    frame_idx + plate_delay_frames,
+                )
             all_violations.append(v)
             severity_map[v.track_id] = v.severity_score
             # Snapshot of violation moment (max 12)
             if len(violation_snapshots) < 12 and v.vehicle_crop is not None:
                 snap = cv2.cvtColor(v.vehicle_crop, cv2.COLOR_BGR2RGB)
-                plate_lbl = ""
-                if v.plate and v.plate.plate_text:
-                    valid = "✓" if v.plate.is_valid else "?"
-                    plate_lbl = f" | {v.plate.plate_text}{valid}"
-                violation_snapshots.append(
-                    (snap, f"#{v.track_id} {v.vehicle_class} "
-                           f"[{v.severity_score:.0f}]{plate_lbl}"))
+                violation_snapshots.append((snap, v))
+
+        if plate_recognizer is not None and pending_plate_events:
+            active_ids = {obj.track_id for obj in objs}
+            settled_ids = []
+            for tid, (event, due_frame) in list(pending_plate_events.items()):
+                if frame_idx < due_frame and tid in active_ids:
+                    continue
+                try:
+                    event.plate = plate_recognizer.recognize(tid)
+                except Exception as exc:
+                    logger.warning("Plaka tanıma hatası (track %s): %s",
+                                   tid, exc)
+                    event.plate = None
+                plate_recognizer.cleanup_track(tid)
+                settled_ids.append(tid)
+            for tid in settled_ids:
+                pending_plate_events.pop(tid, None)
 
         elapsed = time.time() - t0
         annotated = _annotate(
@@ -655,6 +686,18 @@ def run_pipeline(video_path, polygon_pts, conf, iou,
 
     cap.release()
     writer.release()
+
+    if plate_recognizer is not None and pending_plate_events:
+        for tid, (event, _due_frame) in list(pending_plate_events.items()):
+            try:
+                event.plate = plate_recognizer.recognize(tid)
+            except Exception as exc:
+                logger.warning("Final plaka tanıma hatası (track %s): %s",
+                               tid, exc)
+                event.plate = None
+            plate_recognizer.cleanup_track(tid)
+            pending_plate_events.pop(tid, None)
+
     elapsed = time.time() - t0
     proc_fps = frame_idx / elapsed if elapsed > 0 else 0
 
@@ -696,7 +739,17 @@ def run_pipeline(video_path, polygon_pts, conf, iou,
     summary_md = _build_summary_md(stats, proc_fps, frame_idx, fps)
 
     # Gallery
-    gallery = [(img, cap) for img, cap in violation_snapshots] or None
+    gallery_items = []
+    for img, v in violation_snapshots:
+        plate_lbl = ""
+        if v.plate and v.plate.plate_text:
+            valid = "✓" if v.plate.is_valid else "?"
+            plate_lbl = f" | {v.plate.plate_text}{valid}"
+        gallery_items.append(
+            (img, f"#{v.track_id} {v.vehicle_class} "
+                  f"[{v.severity_score:.0f}]{plate_lbl}")
+        )
+    gallery = gallery_items or None
 
     progress(1.0, desc="Done!")
     return out_video, df, fig, summary_md, gallery

@@ -72,14 +72,23 @@ plate:
     img_size: 640
     half: false                         # CPU/MPS'te FP16 desteklenmez
   ocr:
-    backend: "easyocr"                  # "easyocr" | "paddleocr" (gelecek)
+    backend: "paddleocr"                # "easyocr" | "paddleocr" (küçük plakalarda daha iyi)
     languages: ["en"]                   # Latin karakter setine yeter
+    allowlist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
     use_gpu: false                      # Mac'te kapalı; CUDA'lı makinede true
   recognizer:
-    buffer_size: 10                     # Track başına son N frame
-    min_plate_conf: 0.25                # Plaka detect skoru altında atla
-    topk_for_ocr: 3                     # En iyi K crop'a OCR uygula
-    valid_format_bonus: 1.5             # TR formatına uyan sonuca verilen bonus
+    buffer_size: 30                     # Track başına son N frame
+    min_plate_conf: 0.20                # Plaka detect skoru altında atla
+    topk_for_ocr: 8                     # En iyi K crop'a OCR uygula
+    valid_format_bonus: 1.8             # TR formatına uyan sonuca verilen bonus
+    vehicle_padding_ratio: 0.03         # Araç bbox crop'una kenar payı
+    plate_padding_ratio_x: 0.12         # Plaka bbox yatay kenar payı
+    plate_padding_ratio_y: 0.25         # Plaka bbox dikey kenar payı
+    min_plate_width: 32                 # Daha küçük crop OCR'a sokulmaz
+    min_plate_height: 8
+    min_ocr_confidence: 0.15            # Daha düşük OCR sonucu yok sayılır
+    return_invalid_results: false       # TR formatına uymayan metni plaka diye yazma
+    recognition_delay_frames: 30         # İhlal sonrası en net crop için bekle
 
 # --- Veritabanı ---
 database:

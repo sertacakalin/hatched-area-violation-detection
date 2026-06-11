@@ -25,4 +25,9 @@ tqdm>=4.66.0
 roboflow>=1.1.0
 
 # Plaka tanıma (OCR)
+# Varsayılan backend paddleocr (küçük/uzak plakalarda EasyOCR'dan belirgin
+# daha yüksek okuma oranı — bkz. configs/config.yaml plate.ocr.backend).
+# easyocr alternatif backend olarak korunur.
+paddleocr>=3.0.0
+paddlepaddle>=3.0.0
 easyocr>=1.7.0

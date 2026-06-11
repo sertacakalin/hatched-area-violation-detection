@@ -14,6 +14,7 @@ from src.plate.recognizer import PlateRecognizer
 from src.plate.tr_plate import (
     TR_CITY_CODES,
     normalize_tr_plate,
+    repair_tr_plate,
     validate_tr_plate,
 )
 
@@ -23,5 +24,6 @@ __all__ = [
     "PlateRecognizer",
     "TR_CITY_CODES",
     "normalize_tr_plate",
+    "repair_tr_plate",
     "validate_tr_plate",
 ]
