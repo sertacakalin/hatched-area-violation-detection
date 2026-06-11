@@ -101,29 +101,6 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Usage
-
-```bash
-# 1. Define the hatched area polygon by clicking on the first frame of the video
-python scripts/select_roi.py \
-  --video data/videos/test/cam1.mp4 \
-  --output configs/zones/cam1.json
-
-# 2. Run the detection pipeline on the video
-python scripts/run_pipeline.py \
-  --config configs/config.yaml \
-  --video data/videos/test/cam1.mp4 \
-  --zone  configs/zones/cam1.json
-
-# 3. Evaluate detected violations against manual ground truth
-python scripts/evaluate_with_ground_truth.py \
-  --video data/videos/test/cam1.mp4 \
-  --ground-truth data/ground_truth/cam1.json
-
-# 4. Launch the Gradio web demo
-python app.py  # http://localhost:7860
-```
-
 ### Google Colab (for GPU fine-tuning)
 
 ```
@@ -171,24 +148,6 @@ The following items are **explicitly out of scope**:
 - Multi-camera fusion / re-identification across cameras
 
 Some earlier prototype files are retained under [`archive/`](archive/) only as historical reference and are not part of the evaluated system.
-
-## Project Status
-
-- [x] Core pipeline (detection → tracking → zone → violation → storage)
-- [x] ByteTrack integration
-- [x] Manual ROI selection (click-to-define polygon)
-- [x] Severity scoring + violation type classification
-- [x] Two-stage plate recognition (detect → OCR → TR validation)
-- [x] Gradio web demo (with plate toggle + dynamic zone for moving cameras)
-- [x] YOLOv8 fine-tuning notebooks (v1 `best.pt` + v3 `best_v3.pt`)
-- [x] Plate detector training notebook (`06_train_plate_detector.ipynb`)
-- [x] DB schema with idempotent migrations
-- [ ] Roboflow dataset export documented in `configs/dataset_info.yaml` (TODOs remain — see `docs/PROJECT_FINAL_CHECKLIST.md`)
-- [ ] Ground-truth annotation (target: 20–30 violations × 2 videos)
-- [ ] Precision / Recall / F1 evaluation on the test set
-- [ ] Plate OCR accuracy evaluation (separate metric from violation P/R)
-- [ ] Unit test suite (`tests/` — see checklist)
-- [ ] Thesis write-up (template-conformant, 12 sections)
 
 ## License
 
