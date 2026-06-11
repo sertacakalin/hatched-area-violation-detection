@@ -13,6 +13,8 @@ data/sample_*.mp4
 weights/*.pt
 weights/*.onnx
 weights/*.engine
+# Default YOLO downloads can land in the project root.
+/yolov*.pt
 
 # Pipeline outputs (regenerable)
 results/

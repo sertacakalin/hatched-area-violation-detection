@@ -35,6 +35,30 @@ TR_CITY_CODES: dict[str, str] = {
 
 _TR_PLATE_BODY = re.compile(r"^([A-Z]{1,3})(\d{2,4})$")
 
+# OCR'in plakada en sık karıştırdığı karakterler. Bu dönüşümler yalnızca
+# pozisyon belli olduğunda kullanılır; normalize_tr_plate ham metni agresif
+# biçimde değiştirmez.
+_TO_DIGIT = str.maketrans({
+    "O": "0",
+    "Q": "0",
+    "D": "0",
+    "I": "1",
+    "L": "1",
+    "Z": "2",
+    "S": "5",
+    "B": "8",
+    "G": "6",
+    "T": "7",
+})
+_TO_LETTER = str.maketrans({
+    "0": "O",
+    "1": "I",
+    "2": "Z",
+    "5": "S",
+    "6": "G",
+    "8": "B",
+})
+
 
 def normalize_tr_plate(raw: str) -> str:
     """OCR ham çıktısını TR plaka karakter setine indirger.
@@ -47,6 +71,68 @@ def normalize_tr_plate(raw: str) -> str:
     if not raw:
         return ""
     return re.sub(r"[^A-Z0-9]", "", raw.upper())
+
+
+def _translate_with_change_count(text: str, table: dict[int, str]) -> tuple[str, int]:
+    out = []
+    changes = 0
+    for ch in text:
+        mapped = table.get(ord(ch), ch)
+        out.append(mapped)
+        if mapped != ch:
+            changes += 1
+    return "".join(out), changes
+
+
+def repair_tr_plate(raw: str) -> str:
+    """OCR çıktısını TR plaka şablonuna göre kontrollü düzelt.
+
+    Düzeltme kuralı pozisyon bazlıdır:
+    - İlk iki karakter il kodu olduğu için rakam gibi değerlendirilir.
+    - Orta bölüm harf, son bölüm rakam olarak denenir.
+    - Yalnızca 01-81 il kodu ve TR gövde şablonu oluşuyorsa sonuç seçilir.
+
+    Geçerli bir plaka zaten geldiyse aynen korunur. Geçerli aday yoksa
+    normalize edilmiş ham metin döner.
+    """
+    cleaned = normalize_tr_plate(raw)
+    is_valid, _, _ = validate_tr_plate(cleaned)
+    if is_valid:
+        return cleaned
+    if len(cleaned) < 5 or len(cleaned) > 9:
+        return cleaned
+
+    city, city_changes = _translate_with_change_count(cleaned[:2], _TO_DIGIT)
+    if not city.isdigit() or city not in TR_CITY_CODES:
+        return cleaned
+
+    rest = cleaned[2:]
+    candidates: list[tuple[int, str]] = []
+    for letter_count in range(1, 4):
+        digit_count = len(rest) - letter_count
+        if digit_count < 2 or digit_count > 4:
+            continue
+
+        letters, letter_changes = _translate_with_change_count(
+            rest[:letter_count], _TO_LETTER
+        )
+        digits, digit_changes = _translate_with_change_count(
+            rest[letter_count:], _TO_DIGIT
+        )
+        candidate = f"{city}{letters}{digits}"
+        if _TR_PLATE_BODY.match(f"{letters}{digits}"):
+            candidates.append((
+                city_changes + letter_changes + digit_changes,
+                candidate,
+            ))
+
+    if not candidates:
+        return cleaned
+
+    # En az müdahale edilen adayı seç; eşitlikte daha uzun harf bloğu yerine
+    # daha az toplam değişiklik zaten belirleyici olur.
+    candidates.sort(key=lambda item: item[0])
+    return candidates[0][1]
 
 
 def validate_tr_plate(text: str) -> tuple[bool, str | None, str | None]:

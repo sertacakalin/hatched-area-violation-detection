@@ -46,6 +46,9 @@ def _build_plate_recognizer(config: Config):
             languages=config.get("plate.ocr.languages", ["en"]),
             use_gpu=config.get("plate.ocr.use_gpu", False),
             backend=config.get("plate.ocr.backend", "easyocr"),
+            allowlist=config.get(
+                "plate.ocr.allowlist", "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+            ),
         )
         return PlateRecognizer(
             detector=detector,
@@ -54,6 +57,23 @@ def _build_plate_recognizer(config: Config):
             min_plate_conf=config.get("plate.recognizer.min_plate_conf", 0.25),
             topk_for_ocr=config.get("plate.recognizer.topk_for_ocr", 3),
             valid_format_bonus=config.get("plate.recognizer.valid_format_bonus", 1.5),
+            vehicle_padding_ratio=config.get(
+                "plate.recognizer.vehicle_padding_ratio", 0.03
+            ),
+            plate_padding_ratio_x=config.get(
+                "plate.recognizer.plate_padding_ratio_x", 0.12
+            ),
+            plate_padding_ratio_y=config.get(
+                "plate.recognizer.plate_padding_ratio_y", 0.25
+            ),
+            min_plate_width=config.get("plate.recognizer.min_plate_width", 32),
+            min_plate_height=config.get("plate.recognizer.min_plate_height", 8),
+            min_ocr_confidence=config.get(
+                "plate.recognizer.min_ocr_confidence", 0.15
+            ),
+            return_invalid_results=config.get(
+                "plate.recognizer.return_invalid_results", False
+            ),
         )
     except Exception as exc:
         logger.warning(f"PlateRecognizer kurulamadı: {exc} — plaka tanıma kapalı")
@@ -167,6 +187,10 @@ class Pipeline:
                 )
 
             frame_times = []
+            pending_plate_events: dict[int, tuple[ViolationEvent, int]] = {}
+            plate_delay_frames = int(
+                self.config.get("plate.recognizer.recognition_delay_frames", 30)
+            )
             logger.info(f"İşlem başlıyor: {total} kare, {fps:.1f} FPS")
 
             for frame_num, frame in fp:
@@ -183,7 +207,10 @@ class Pipeline:
                 # 1b. Plaka ring buffer'ını güncelle (plaka aktifse)
                 if self.plate_recognizer is not None:
                     self.plate_recognizer.update_buffer(
-                        tracked_objects, frame, frame_num
+                        tracked_objects,
+                        frame,
+                        frame_num,
+                        keep_track_ids=set(pending_plate_events),
                     )
 
                 # 2. İhlal tespiti (state machine + trajectory + severity)
@@ -192,24 +219,46 @@ class Pipeline:
                     extra_active_ids=filtered_ids,
                 )
 
-                # 3. Yeni ihlaller → plaka tanı + kayıt
+                # 3. Yeni ihlaller → kısa gecikmeyle plaka tanı + kayıt
                 for event in new_violations:
                     if self.plate_recognizer is not None:
-                        try:
-                            event.plate = self.plate_recognizer.recognize(event.track_id)
-                        except Exception as exc:
-                            logger.warning(
-                                f"Plaka tanıma hatası (track {event.track_id}): {exc}"
-                            )
-                            event.plate = None
-                    self.violation_logger.log_violation(event)
+                        pending_plate_events[event.track_id] = (
+                            event,
+                            frame_num + plate_delay_frames,
+                        )
+                    else:
+                        self.violation_logger.log_violation(event)
+                        if on_violation is not None:
+                            try:
+                                on_violation(event)
+                            except Exception as exc:
+                                logger.warning(f"on_violation callback hatası: {exc}")
                     self.events.append(event)
                     self._total_violations += 1
-                    if on_violation is not None:
+
+                if self.plate_recognizer is not None and pending_plate_events:
+                    active_ids = {obj.track_id for obj in tracked_objects}
+                    settled_ids = []
+                    for tid, (event, due_frame) in list(pending_plate_events.items()):
+                        if frame_num < due_frame and tid in active_ids:
+                            continue
                         try:
-                            on_violation(event)
+                            event.plate = self.plate_recognizer.recognize(tid)
                         except Exception as exc:
-                            logger.warning(f"on_violation callback hatası: {exc}")
+                            logger.warning(
+                                f"Plaka tanıma hatası (track {tid}): {exc}"
+                            )
+                            event.plate = None
+                        self.plate_recognizer.cleanup_track(tid)
+                        self.violation_logger.log_violation(event)
+                        if on_violation is not None:
+                            try:
+                                on_violation(event)
+                            except Exception as exc:
+                                logger.warning(f"on_violation callback hatası: {exc}")
+                        settled_ids.append(tid)
+                    for tid in settled_ids:
+                        pending_plate_events.pop(tid, None)
 
                 # 4. Görselleştirme
                 display_frame = self._visualize(
@@ -241,6 +290,24 @@ class Pipeline:
             self._video_writer.release()
         if show_display:
             cv2.destroyAllWindows()
+
+        if self.plate_recognizer is not None and pending_plate_events:
+            for tid, (event, _due_frame) in list(pending_plate_events.items()):
+                try:
+                    event.plate = self.plate_recognizer.recognize(tid)
+                except Exception as exc:
+                    logger.warning(
+                        f"Final plaka tanıma hatası (track {tid}): {exc}"
+                    )
+                    event.plate = None
+                self.plate_recognizer.cleanup_track(tid)
+                self.violation_logger.log_violation(event)
+                if on_violation is not None:
+                    try:
+                        on_violation(event)
+                    except Exception as exc:
+                        logger.warning(f"on_violation callback hatası: {exc}")
+                pending_plate_events.pop(tid, None)
 
         # Sonuç raporu
         avg_fps = 1.0 / (sum(frame_times) / len(frame_times)) if frame_times else 0
