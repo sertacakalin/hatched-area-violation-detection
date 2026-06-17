@@ -102,29 +102,6 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Usage
-
-```bash
-# 1. Define the hatched area polygon by clicking on the first frame of the video
-python scripts/select_roi.py \
-  --video data/videos/test/cam1.mp4 \
-  --output configs/zones/cam1.json
-
-# 2. Run the detection pipeline on the video
-python scripts/run_pipeline.py \
-  --config configs/config.yaml \
-  --video data/videos/test/cam1.mp4 \
-  --zone  configs/zones/cam1.json
-
-# 3. Evaluate detected violations against manual ground truth
-python scripts/evaluate_with_ground_truth.py \
-  --video data/videos/test/cam1.mp4 \
-  --ground-truth data/ground_truth/cam1.json
-
-# 4. Launch the Gradio web demo
-python app.py  # http://localhost:7860
-```
-
 ### Google Colab (for GPU fine-tuning)
 
 All notebooks live under `scripts/notebooks/`:
@@ -201,25 +178,6 @@ The following items are **explicitly out of scope**:
 
 Some earlier prototype files are retained under [`archive/`](archive/) only as historical reference and are not part of the evaluated system.
 
-## Project Status
-
-- [x] Core pipeline (detection → tracking → zone → violation → storage)
-- [x] ByteTrack integration
-- [x] Manual ROI selection (click-to-define polygon)
-- [x] Severity scoring + violation type classification
-- [x] Spatial deduplication + tuned ByteTrack (fixes same-vehicle multi-count)
-- [x] Two-stage plate recognition (detect → OCR → TR validation)
-- [x] Gradio web demo (fixed camera, plate toggle)
-- [x] YOLOv8 fine-tuning notebooks (v1 `best.pt`, v3 `best_v3.pt`, v4 `best_v4.pt`)
-- [x] Plate detector training notebook (`06_train_plate_detector.ipynb`)
-- [x] DB schema with idempotent migrations
-- [x] Ground-truth annotation (`data/ground_truth/*.json`)
-- [x] Detection mAP evaluation + v3-vs-v4 comparison (Ch7, `compare_v3_v4_metrics.py`)
-- [x] Pipeline-level P / R / F1 field test (Ch8: P=0.889, R=0.800, F1=0.842)
-- [x] Thesis write-up (chapters under `docs/thesis/`)
-- [ ] Roboflow dataset export documented in `configs/dataset_info.yaml` (TODOs remain — see `docs/PROJECT_FINAL_CHECKLIST.md`)
-- [ ] Plate OCR accuracy evaluation (separate metric from violation P/R)
-- [~] Unit test suite (`tests/` — currently TR plate validation only)
 
 ## License
 
