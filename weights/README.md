@@ -9,10 +9,33 @@ are pulled into this directory on demand. Only this README is tracked.
 |---|---|---|
 | `yolov8s.pt` | ~22 MB | COCO-pretrained YOLOv8s, downloaded from Ultralytics on first use. Baseline for the comparison experiment. |
 | `best.pt` | ~21 MB | v1 fine-tune (yolov8s, 50 epoch, dataset v2). Legacy baseline. |
-| `best_v3.pt` | ~50 MB | **v3 fine-tune (yolov8m, 100 epoch, lr=1e-3, dataset `final_v3`). Production model — `configs/config.yaml` defaultu.** Sınıflar: `{0:bus, 1:car, 2:motorcycle, 3:truck}`. mAP50=0.808, mAP50-95=0.653, P=0.765, R=0.787. |
-| `plate.pt` | ~6 MB | Türk plaka tespit modeli (yolov8n, 80 epoch, dataset `TR-PLAKA-1`). Tek sınıf: `license_plate`. mAP50=0.982, mAP50-95=0.817. Eğitim: `notebooks/06_train_plate_detector.ipynb`. |
+| `best_v3.pt` | ~50 MB | v3 fine-tune (yolov8m, 100 epoch, lr=1e-3, dataset `final_v3`). Önceki model — v4 için warm-start kaynağı. Sınıflar: `{0:bus, 1:car, 2:motorcycle, 3:truck}`. Test mAP50=0.898, mAP50-95=0.757, P=0.851, R=0.867. |
+| `best_v4.pt` | ~50 MB | **v4 fine-tune (yolov8m, `best_v3.pt` warm-start + 365 manuel doğrulanmış drone karesi, dataset `final_v4`). Production model — `configs/config.yaml` defaultu.** Sınıflar: `{0:bus, 1:car, 2:motorcycle, 3:truck}`. Test mAP50=0.896, mAP50-95=0.725, P=0.850, R=0.850. Eğitim: `scripts/notebooks/08_train_mobese_v4.ipynb`. |
+| `plate.pt` | ~6 MB | Türk plaka tespit modeli (yolov8n, 80 epoch, dataset `TR-PLAKA-1`). Tek sınıf: `license_plate`. mAP50=0.982, mAP50-95=0.817. Eğitim: `scripts/notebooks/06_train_plate_detector.ipynb`. |
 
-## `best_v3.pt` Provenance (Production)
+## `best_v4.pt` Provenance (Production)
+
+| Field | Value |
+|---|---|
+| Base model | `best_v3.pt` warm-start (kendisi `yolov8m.pt` COCO fine-tune) |
+| Training data | `final_v4` = `final_v3` + 365 manuel doğrulanmış drone karesi (toplam 6 948 görüntü) |
+| Classes | `bus`, `car`, `motorcycle`, `truck` (4) |
+| Image size | 640×640 |
+| Initial / final LR | 0.005 / 0.01 (warm-start nedeniyle default'tan yarıya indirildi) |
+| Warmup epochs | 3 |
+| Test precision | 0.850 |
+| Test recall | 0.850 |
+| Test mAP50 | 0.896 |
+| Test mAP50-95 | 0.725 |
+| Subset mAP50 | Roboflow 0.875 · auto-labeled CCTV 0.918 · drone 0.822 |
+| Training notebook | `scripts/notebooks/08_train_mobese_v4.ipynb` |
+| Comparison script | `scripts/compare_v3_v4_metrics.py` |
+
+Detaylı değerlendirme: `docs/thesis/chapter7_experiments_evaluation.md`.
+
+> **Not (mimari):** Dosya boyutu (~50 MB) ve `best_v3.pt` warm-start zinciri bu modelin **yolov8m** olduğunu gösterir. Thesis Ch7 metni bazı yerlerde "YOLOv8s" diyor — bu metinsel tutarsızlık tezde düzeltilmeli.
+
+## `best_v3.pt` Provenance (Previous)
 
 | Field | Value |
 |---|---|
@@ -23,10 +46,10 @@ are pulled into this directory on demand. Only this README is tracked.
 | Batch size | 16 |
 | Max epochs | 100 |
 | Initial LR | 0.001 (fine-tune, best.pt'den 10× küçük) |
-| Final precision | 0.7647 |
-| Final recall | 0.7873 |
-| Final mAP50 | 0.8075 |
-| Final mAP50-95 | 0.6530 |
+| Test precision | 0.851 |
+| Test recall | 0.867 |
+| Test mAP50 | 0.898 |
+| Test mAP50-95 | 0.757 |
 
 ## `plate.pt` Provenance
 
@@ -43,7 +66,7 @@ are pulled into this directory on demand. Only this README is tracked.
 | Final recall | 0.9447 |
 | Final mAP50 | 0.9815 |
 | Final mAP50-95 | 0.8171 |
-| Training notebook | `notebooks/06_train_plate_detector.ipynb` |
+| Training notebook | `scripts/notebooks/06_train_plate_detector.ipynb` |
 
 ## `best.pt` Provenance (Legacy)
 
@@ -90,15 +113,24 @@ istanbul_finetune4/
 **Copy these figures into `docs/figures/`** for the thesis — they are
 Section 7 (Experiments and Evaluation) material.
 
-## How to Pull `best_v3.pt` Locally (Production)
+## How to Pull `best_v4.pt` Locally (Production)
 
 ### Option A — Manual
 
-1. Open Google Drive → `MyDrive/tez_models/final_v3/weights/best.pt`
-2. Download and rename to `weights/best_v3.pt`
+1. Open Google Drive → `MyDrive/tez_models/final_v4/weights/best.pt`
+2. Download and rename to `weights/best_v4.pt`
 3. Done.
 
 ### Option B — Programmatic
+
+```bash
+# Colab (Drive mounted):
+cp /content/drive/MyDrive/tez_models/final_v4/weights/best.pt weights/best_v4.pt
+# Mac (Drive Desktop):
+cp ~/Google\ Drive/My\ Drive/tez_models/final_v4/weights/best.pt weights/best_v4.pt
+```
+
+## How to Pull `best_v3.pt` Locally (Previous)
 
 ```bash
 # Colab (Drive mounted):
@@ -113,7 +145,7 @@ cp ~/Google\ Drive/My\ Drive/tez_models/final_v3/weights/best.pt weights/best_v3
 cp ~/Google\ Drive/My\ Drive/tez_models/plate/weights/best.pt weights/plate.pt
 ```
 
-Veya `notebooks/06_train_plate_detector.ipynb` ile retrain (TR-PLAKA-1 dataset, ~30 dk T4).
+Veya `scripts/notebooks/06_train_plate_detector.ipynb` ile retrain (TR-PLAKA-1 dataset, ~30 dk T4).
 
 ## How to Pull `best.pt` Locally (legacy)
 
@@ -134,7 +166,7 @@ python -c "from ultralytics import YOLO; YOLO('yolov8s.pt')"
 
 If you ever lose `best.pt` on Drive, you can retrain it from the same
 Roboflow dataset version using
-`notebooks/03_vehicle_detection_finetuning.ipynb` on Colab. Make sure:
+`scripts/notebooks/03_vehicle_detection_finetuning.ipynb` on Colab. Make sure:
 
 - `ROBOFLOW_API_KEY` is in Colab Secrets (**never commit it**)
 - Drive is mounted
