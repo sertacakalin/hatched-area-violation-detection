@@ -27,11 +27,15 @@ Traffic Video  →  YOLOv8 (best_v4.pt)  →  ByteTrack  →  Zone Check (Shapel
 6. **Reads the license plate** of confirmed violators (YOLOv8n plate detector + PaddleOCR + Turkish 81-province format validation)
 7. **Logs** the event to SQLite with vehicle crop, plate crop, frame snapshot, and timestamp
 
+The system targets fixed overpass and municipal (İBB MOBESE) traffic cameras. For
+**KVKK** (Turkish data-protection) compliance, license-plate recognition runs
+**only on confirmed violators** and **faces are never processed**.
+
 ## Original Contribution
 
 The detection (YOLOv8) and tracking (ByteTrack) components are off-the-shelf. The original work in this thesis is:
 
-1. **Fine-tuning YOLOv8m on a custom Istanbul traffic dataset** — the production model `best_v4.pt` is a warm-start from `best_v3.pt` (the `final_v3` 100-epoch fine-tune) with 365 additional manually verified drone frames, for a 6,948-image training set. It reaches **mAP@50 = 0.896** on the held-out test set (Roboflow community sub-set 0.875, auto-labeled CCTV 0.918, drone 0.822). Evaluated against the COCO baseline (`yolov8s.pt`), an earlier yolov8s fine-tune (`best.pt`), and the v3 model — see `weights/README.md`, `scripts/compare_v3_v4_metrics.py`, and `docs/thesis/chapter7_experiments_evaluation.md`.
+1. **Fine-tuning YOLOv8m on a custom Istanbul Hatched-Area Traffic Dataset (IHTD)** — the production model `best_v4.pt` is a warm-start from `best_v3.pt` (the YOLOv8m fine-tune) plus 365 additional manually verified 4K-camera frames (cam10/cam11), targeting the under-represented motorcycle class. The IHTD has 3,897 source frames expanded to 9,353 exported images by train-set augmentation. It reaches **mAP@50 = 0.896** on the held-out test set (Roboflow community sub-set 0.875, auto-labeled CCTV 0.918, 4K-camera 0.822). The model was built in three transfer-learning stages — YOLOv8s baseline (`best.pt`) → YOLOv8m (`best_v3.pt`) → warm-start (`best_v4.pt`) — see `weights/README.md`, `scripts/compare_v3_v4_metrics.py`, and thesis Chapter 7.
 2. **Temporal filtering with a four-state state machine** (OUTSIDE → ENTERING → INSIDE → VIOLATION) that requires N consecutive frames inside the zone plus a per-track lock + cooldown window, hardened with **spatial deduplication** (suppresses a new violation if the same x/y region fired within a recent window) to absorb track-ID churn — eliminates bounding-box jitter false positives that a simple inside/outside check produces.
 3. **Trajectory + severity scoring pipeline** that classifies each confirmed violation as `KAYNAK` (lane change / diagonal crossing) / `SEYİR` (cruising inside the zone) / `KENAR_TEMASI` (edge contact, likely false positive) / `DİĞER` and assigns a 0–100 score, enabling threshold-based false-positive filtering downstream.
 4. **Two-stage plate recognition** with a fine-tuned YOLOv8n plate detector (`plate.pt`, dataset `TR-PLAKA-1`), best-frame voting from a per-track ring buffer, PaddleOCR (EasyOCR optional) with upscale + unsharp pre-processing, and Turkish 81-province plate format validation (`src/plate/tr_plate.py`).
@@ -70,12 +74,40 @@ OUTSIDE --[enters zone]--> ENTERING --[>= min_frames_in_zone]--> INSIDE --[confi
 ```
 score = 0.30 * duration_norm + 0.25 * distance_norm + 0.30 * depth_norm + 0.15 * angle_norm
 
-Level:    0–25 DÜŞÜK  |  25–50 ORTA  |  50–75 YÜKSEK  |  75–100 KRİTİK
-Type:     KAYNAK       (short diagonal crossing / lane change)
-          SEYİR        (extended travel inside zone)
-          KENAR_TEMASI (shallow penetration, likely false positive)
-          DİĞER        (uncategorized)
+Level:  0–25 DÜŞÜK  |  25–50 ORTA  |  50–75 YÜKSEK  |  75–100 KRİTİK
+Type:   LANE_CHANGE  (KAYNAK)        short diagonal crossing
+        CRUISING     (SEYİR)         extended travel inside zone
+        EDGE_CONTACT (KENAR_TEMASI)  shallow penetration, likely false positive
+        (DİĞER / OTHER fallback when none of the above applies)
 ```
+
+The three thesis-facing violation types (`LANE_CHANGE`, `CRUISING`,
+`EDGE_CONTACT`) are the labels used in the ground-truth JSON; the runtime
+`ViolationType` enum stores the Turkish equivalents shown in parentheses.
+
+## Results
+
+Vehicle detector (`best_v4.pt`) on the held-out IHTD v4 test set, and the full
+pipeline on the hand-annotated field test (thesis Chapters 7–8):
+
+| Metric | Value |
+|--------|-------|
+| Detector test mAP@50 | **0.896** (target ≥ 0.85) |
+| Detector test mAP@50-95 | 0.725 |
+| Detector test Precision / Recall | 0.850 / 0.850 |
+| Pipeline field test | **P = 0.889, R = 0.800, F1 = 0.842** |
+
+**Per-class mAP@50:** car 0.961 · truck 0.910 · bus 0.900 · motorcycle 0.815.
+
+**Cross-distribution robustness** (test sub-populations): Roboflow community
+manual 0.875 · auto-labeled CCTV 0.918 · manually verified 4K camera 0.822.
+
+**Single-frame latency:** Tesla T4 GPU ≈ 9.3 ms (real-time 30 FPS) · Apple M2
+CPU ≈ 512 ms (offline batch). Model: YOLOv8m, ~25.9 M params, 79.1 GFLOPs.
+
+> v4 is a warm-start from v3 (`best_v3.pt`) plus 365 manually verified cam10/cam11
+> frames; it is statistically indistinguishable from v3 at mAP@50 while delivering
+> the intended targeted gain on the minority motorcycle class.
 
 ## Tech Stack
 
@@ -102,6 +134,29 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Usage
+
+```bash
+# 1. Define the hatched area polygon by clicking on the first frame of the video
+python scripts/select_roi.py \
+  --video data/videos/test/cam1.mp4 \
+  --output configs/zones/cam1.json
+
+# 2. Run the detection pipeline on the video
+python scripts/run_pipeline.py \
+  --config configs/config.yaml \
+  --video data/videos/test/cam1.mp4 \
+  --zone  configs/zones/cam1.json
+
+# 3. Evaluate detected violations against manual ground truth
+python scripts/evaluate_with_ground_truth.py \
+  --video data/videos/test/cam1.mp4 \
+  --ground-truth data/ground_truth/cam1.json
+
+# 4. Launch the Gradio web demo
+python app.py  # http://localhost:7860
+```
+
 ### Google Colab (for GPU fine-tuning)
 
 All notebooks live under `scripts/notebooks/`:
@@ -114,7 +169,7 @@ All notebooks live under `scripts/notebooks/`:
 05_train_mobese_v3.ipynb             → v3 fine-tune (yolov8m, final_v3)
 06_train_plate_detector.ipynb        → plate detector (yolov8n, TR-PLAKA-1)
 07_violation_detection_eval.ipynb    → end-to-end pipeline on a test video
-08_train_mobese_v4.ipynb             → v4 warm-start (best_v3 + drone frames)
+08_train_mobese_v4.ipynb             → v4 warm-start (best_v3 + 4K-camera frames)
 09_train_mobese_v5.ipynb             → v5 experiment (work in progress)
 ```
 
@@ -139,20 +194,39 @@ Large data artifacts are intentionally not tracked in this repository. Raw video
 Roboflow exports, model weights, and generated results live outside git because
 they are either external or reproducible.
 
-Dataset inventory used in the thesis:
+Three datasets are used (see thesis Chapter 4):
 
-| Source | Images | Annotation type |
-|--------|--------|-----------------|
-| Roboflow community source set | 2,919 | community/manual |
-| Pseudo-labeled day/night/evening frames | 3,664 | YOLOv8 auto-label |
-| Hand-verified cam10/cam11 frames | 365 | Label Studio manual |
-| **Total thesis inventory** | **6,948** | mixed |
+1. **Istanbul Hatched-Area Traffic Dataset (IHTD v4)** — the production
+   vehicle-detection dataset used to fine-tune `best_v4.pt`. **3,897 source
+   frames** collected and annotated by the author, expanded to **9,353 exported
+   images** by train-set-only augmentation. Classes: `bus`, `car`, `motorcycle`,
+   `truck`.
+2. **TR-PLAKA-1** — public Roboflow dataset of Turkish license plates, single
+   class `license_plate`, used to fine-tune the plate detector.
+3. **Ground-truth evaluation set** — author-produced JSON under
+   `data/ground_truth/` (one per video, listing violation events as
+   `CRUISING` / `EDGE_CONTACT` / `LANE_CHANGE`), used only to measure pipeline
+   P / R / F1 and never seen during training.
 
-The Roboflow upload package prepared from the recovered local data contains
-4,029 images and 74,279 bounding boxes with classes `bus`, `car`, `motorcycle`,
-and `truck`. After publishing the dataset on Roboflow Universe, use the
-Universe project's **Cite This Project** BibTeX for the dataset citation. Use
-[`CITATION.cff`](CITATION.cff) to cite this software repository.
+**IHTD v4 source composition (3,897 frames):**
+
+| Source | Frames | Share |
+|--------|--------|-------|
+| Author recordings (Mall of Istanbul cam1–3 + Güneşli cam4–5), manual labels | 981 | 25.2 % |
+| İBB MOBESE public cameras (day / evening / night), semi-supervised | 2,663 | 68.3 % |
+| 4K-camera footage (high-altitude cam10 / cam11), manually verified | 253 | 6.5 % |
+
+**Split (deterministic, `random.seed(42)`, before augmentation):** 70 / 20 / 10 →
+**8,184 train · 779 valid · 390 test** = 9,353 images. Only the training split is
+augmented, so no augmented copy of a frame can leak into validation or test.
+
+**Class distribution** (bounding boxes): car 79.1 %, truck 18.1 %, motorcycle
+1.8 %, bus 0.9 % — reflecting real Istanbul traffic; the minority classes explain
+the lower motorcycle/bus recall analysed in thesis Chapter 8.
+
+After publishing IHTD on Roboflow Universe, use the Universe project's **Cite This
+Project** BibTeX for the dataset citation. Use [`CITATION.cff`](CITATION.cff) to
+cite this software repository.
 
 ## Thesis Scope
 
@@ -178,6 +252,25 @@ The following items are **explicitly out of scope**:
 
 Some earlier prototype files are retained under [`archive/`](archive/) only as historical reference and are not part of the evaluated system.
 
+## Project Status
+
+- [x] Core pipeline (detection → tracking → zone → violation → storage)
+- [x] ByteTrack integration
+- [x] Manual ROI selection (click-to-define polygon)
+- [x] Severity scoring + violation type classification
+- [x] Spatial deduplication + tuned ByteTrack (fixes same-vehicle multi-count)
+- [x] Two-stage plate recognition (detect → OCR → TR validation)
+- [x] Gradio web demo (fixed camera, plate toggle)
+- [x] YOLOv8 fine-tuning notebooks (v1 `best.pt`, v3 `best_v3.pt`, v4 `best_v4.pt`)
+- [x] Plate detector training notebook (`06_train_plate_detector.ipynb`)
+- [x] DB schema with idempotent migrations
+- [x] Ground-truth annotation (`data/ground_truth/*.json`)
+- [x] Detection mAP evaluation + v3-vs-v4 comparison (Ch7, `compare_v3_v4_metrics.py`)
+- [x] Pipeline-level P / R / F1 field test (Ch8: P=0.889, R=0.800, F1=0.842)
+- [x] Thesis write-up (chapters under `docs/thesis/`)
+- [ ] Roboflow dataset export documented in `configs/dataset_info.yaml` (TODOs remain — see `docs/PROJECT_FINAL_CHECKLIST.md`)
+- [ ] Plate OCR accuracy evaluation (separate metric from violation P/R)
+- [~] Unit test suite (`tests/` — currently TR plate validation only)
 
 ## License
 
