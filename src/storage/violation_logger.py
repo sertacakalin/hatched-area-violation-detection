@@ -53,6 +53,13 @@ class ViolationLogger:
             plate_crop_path = str(self.plates_dir / plate_filename)
             cv2.imwrite(plate_crop_path, plate.plate_image)
 
+        # Tam kare artık diskte — in-memory kopyayı bırak. Aksi halde bu event
+        # pipeline.events / all_violations listelerinde tutulduğu için her ihlal
+        # bir tam kare kadar RAM'i (1080p'de ~6 MB) kalıcı işgal eder. Küçük olan
+        # vehicle_crop/plate_image'a dokunmuyoruz: on_violation callback'leri
+        # (ör. live_alert kanıt fotosu) log_violation'dan SONRA bunları kullanıyor.
+        event.frame_image = None
+
         # Bbox'ı string olarak sakla
         bbox_str = ",".join(map(str, event.vehicle_bbox.astype(int).tolist()))
 

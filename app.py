@@ -641,6 +641,16 @@ def run_pipeline(video_path, polygon_pts, conf, iou,
             if len(trail) > TRAIL_LEN:
                 trail.pop(0)
 
+        # Prune trails/severity for tracks not in this frame. ByteTrack recycles
+        # track IDs, so keeping stale entries makes a reused violator ID append a
+        # new vehicle's positions to the old trail — drawing long red streaks
+        # across the frame (and leaking memory as both dicts grow unbounded).
+        active_ids = {obj.track_id for obj in objs}
+        for tid in list(trails):
+            if tid not in active_ids:
+                del trails[tid]
+                severity_map.pop(tid, None)
+
         # Collect violations
         for v in new_viol:
             if plate_recognizer is not None:
